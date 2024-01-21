@@ -5,7 +5,6 @@ from dataclasses import dataclass
 import os 
 import io
 import pickle
-import copy
 import math
 import matplotlib.pyplot as plt
 
@@ -14,7 +13,8 @@ if hasattr(__builtins__,'__IPYTHON__'):
 else:
     from tqdm import tqdm
 
-from model import GPT, Tokenizer
+from model import GPT
+from tokenizer import Tokenizer
 
 # %%
 @dataclass
@@ -41,9 +41,10 @@ class TrainConfig:
     weight_decay = 1e-1
     beta1 = 0.9
     beta2 = 0.95
+    label_smoothing = 0.1
 
 # %%
-tokenizer = Tokenizer()
+tokenizer = Tokenizer(weight_path="char_norm.pkl")
 # print(tokenizer.vocab_size)
 # print(tokenizer.encode("This is a sentence"))
 # print(''.join(tokenizer.decode(tokenizer.encode("This is a sentence"))))
@@ -148,7 +149,6 @@ def train_fn(model: nn.Module,
              savepath: str = None,
              device='cpu'):
 
-    best_weight = copy.deepcopy(model.state_dict())
     best_loss = float('inf')
     iter_num = 0
     train_phases = ['train', 'val']
@@ -168,7 +168,8 @@ def train_fn(model: nn.Module,
                 print(f"Loaded model with loss: {best_loss:0.4f}")
         except:
             print(f"Could not load from path: {savepath}")
-
+    
+    print("ITER: ", iter_num)
 
     for e in range(epoch):
         for phase in train_phases:
@@ -179,10 +180,11 @@ def train_fn(model: nn.Module,
 
             for _ in tqdm_prog:
                 x, y = get_batch()
-                #x, y = x.to(device), y.to(device)
 
                 with torch.set_grad_enabled(phase == 'train'):
-                    _, batch_loss = model(x, y)
+                    _, batch_loss = model(x, y, 
+                                          closs_weight=tokenizer.weight if is_training else None,
+                                          label_smoothing=TrainConfig.label_smoothing if is_training else 0.0)
                     
                     if is_training:
                         batch_loss.backward()
@@ -197,14 +199,13 @@ def train_fn(model: nn.Module,
                 # Stats
                 dats += x.size(0)
                 loss += batch_loss.item() * x.size(0)
-                tqdm_prog.set_description(f"Epoch {e+1} [{phase.upper()}]: Loss: {loss/dats:.4f}")
+                tqdm_prog.set_description(f"Epoch {e+1} [{phase.upper()}]: Loss: {loss/dats:.4f}, lr: {lr:0.6f}")
 
             epoch_loss = loss / dats
             losses[phase].append(epoch_loss)
 
             if phase == "val" and epoch_loss < best_loss:
                 best_loss = epoch_loss
-                best_weight = copy.deepcopy(model.state_dict())
                 if savepath:
                     with open(savepath, 'wb') as filehandler:
                         pickle.dump({
@@ -216,9 +217,9 @@ def train_fn(model: nn.Module,
                         }, filehandler)
                 print(f"Best loss found: {best_loss:3.4f}")
         
-        
-        x = torch.tensor(tokenizer.encode("he is a"), dtype=torch.int).unsqueeze(0)
+        # Inference test
         model.eval()
+        x = torch.tensor(tokenizer.encode("he is a"), dtype=torch.int).unsqueeze(0)
         print("Inference:", ''.join(tokenizer.decode(model.generate(x, max_new_tokens=500, 
                                                                     top_k=2).detach()[0].tolist())))
 
@@ -239,7 +240,6 @@ def train_fn(model: nn.Module,
         plt.close(fig)
 
     print(f'Best loss: {best_loss:3.4f}')
-    model.load_state_dict(best_weight)
 
 # %%
 train_fn(model, 
@@ -256,7 +256,7 @@ savepath = os.path.join(
 def plot_graph(savepath):
     with open(savepath, 'rb') as filehandler:
         prev_train = CPU_Unpickler(filehandler).load()
-        best_weight = prev_train['best_weight']
+        # best_weight = prev_train['best_weight']
         model.load_state_dict(prev_train['best_weight'])
         losses = prev_train['losses']
         best_loss = prev_train['best_loss']
@@ -291,6 +291,5 @@ model.eval()
 ''.join(tokenizer.decode(model.generate(x, max_new_tokens=500, top_k=2).detach()[0].tolist()))
 
 # %%
-
 
 

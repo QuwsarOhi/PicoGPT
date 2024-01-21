@@ -1,11 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import List
-import string
-# from dataclasses import dataclass
 import inspect
 
+# from dataclasses import dataclass
 # @dataclass
 # class GPTConfig:
 #     context_len: int = 256
@@ -16,33 +14,6 @@ import inspect
 #     dropout: float = 0.05
 #     bias: bool = False 
 
-class Tokenizer():
-    '''
-    Very simple tokenizer that convers integer to ASCII
-    '''
-    __slots__ = ['vocab_size', 'enc', 'dec', 'specials']
-    
-    def __init__(self, specials: List[str] = ['<?>']) -> None:
-        self.enc = dict((c, i) for i, c in enumerate(specials))
-        self.dec = dict((i, c) for i, c in enumerate(specials))
-        self.specials = specials
-        self.__build()
-        
-    def __build(self):
-        n = len(self.specials)
-        for i, c in enumerate(string.printable):
-            self.enc[c] = i + n
-            self.dec[i + n] = c
-        # vocab size is 101
-        self.vocab_size = len(self.enc)
-            
-    def encode(self, x: List[str]) -> List[int]:
-        return [(self.enc[c] if c in self.enc else 0) for c in x]
-    
-    def decode(self, x: List[int]) -> List[str]:
-        return [(self.dec[i] if i in self.dec else self.dec[0]) for i in x]   
-
-    
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -190,7 +161,7 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None):
+    def forward(self, idx, targets=None, closs_weight=None, label_smoothing=None):
         device = idx.device
         b, t = idx.size()
         assert t <= self.config.context_len, f"Cannot forward sequence of length {t}, block size is only {self.config.context_len}"
@@ -212,7 +183,11 @@ class GPT(nn.Module):
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), 
+                                   targets.view(-1), 
+                                   weight=closs_weight,
+                                   ignore_index=-1,
+                                   label_smoothing=label_smoothing)
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
