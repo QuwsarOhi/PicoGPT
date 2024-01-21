@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from typing import List
+import string
 # from dataclasses import dataclass
 import inspect
 
@@ -8,11 +10,38 @@ import inspect
 # class GPTConfig:
 #     context_len: int = 256
 #     vocab_size: int = 128 
-#     n_layer: int = 4
-#     n_head: int = 4
+#     n_layer: int = 8
+#     n_head: int = 2
 #     n_embd: int = 64
 #     dropout: float = 0.05
 #     bias: bool = False 
+
+class Tokenizer():
+    '''
+    Very simple tokenizer that convers integer to ASCII
+    '''
+    __slots__ = ['vocab_size', 'enc', 'dec', 'specials']
+    
+    def __init__(self, specials: List[str] = ['<?>']) -> None:
+        self.enc = dict((c, i) for i, c in enumerate(specials))
+        self.dec = dict((i, c) for i, c in enumerate(specials))
+        self.specials = specials
+        self.__build()
+        
+    def __build(self):
+        n = len(self.specials)
+        for i, c in enumerate(string.printable):
+            self.enc[c] = i + n
+            self.dec[i + n] = c
+        # vocab size is 101
+        self.vocab_size = len(self.enc)
+            
+    def encode(self, x: List[str]) -> List[int]:
+        return [(self.enc[c] if c in self.enc else 0) for c in x]
+    
+    def decode(self, x: List[int]) -> List[str]:
+        return [(self.dec[i] if i in self.dec else self.dec[0]) for i in x]   
+
     
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
@@ -178,10 +207,6 @@ class GPT(nn.Module):
         # propagating through transformers
         for i, block in enumerate(self.transformer.h):
             x = block(x)
-            if i in self.config.repeat:
-                for j in range(self.config.repeat[i]-1):
-                    x = block(x)
-                
         x = self.transformer.ln_f(x)
 
         if targets is not None:
