@@ -19,11 +19,11 @@ from tokenizer import Tokenizer
 # %%
 @dataclass
 class GPTConfig:
-    context_len: int = 256
+    context_len: int = 512
     vocab_size: int = 128 
     n_layer: int = 8
-    n_head: int = 2
-    n_embd: int = 64
+    n_head: int = 4
+    n_embd: int = 128
     dropout: float = 0.05
     bias: bool = False 
     
@@ -183,7 +183,7 @@ def train_fn(model: nn.Module,
 
                 with torch.set_grad_enabled(phase == 'train'):
                     _, batch_loss = model(x, y, 
-                                          closs_weight=tokenizer.weight if is_training else None,
+                                          #closs_weight=tokenizer.weight if is_training else None,
                                           label_smoothing=TrainConfig.label_smoothing if is_training else 0.0)
                     
                     if is_training:
@@ -209,7 +209,7 @@ def train_fn(model: nn.Module,
                 if savepath:
                     with open(savepath, 'wb') as filehandler:
                         pickle.dump({
-                            'best_weight': best_weight,
+                            'best_weight': model.state_dict(),
                             'best_loss': best_loss,
                             'losses': losses,
                             'optimizer': optimizer,
