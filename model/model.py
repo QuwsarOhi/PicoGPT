@@ -22,7 +22,7 @@ else:
 @dataclass
 class GPTConfig:
     context_len: int = 256
-    vocab_size: int = 101 
+    vocab_size: int = 128 
     n_layer: int = 4
     n_head: int = 2
     n_embd: int = 64
@@ -50,7 +50,6 @@ import string
 class Tokenizer():
     '''
     Very simple tokenizer that convers integer to ASCII
-    [0, 7] can be saved for special tokens if needed as they are not viewable
     '''
     __slots__ = ['vocab_size', 'enc', 'dec', 'specials']
     
@@ -65,6 +64,7 @@ class Tokenizer():
         for i, c in enumerate(string.printable):
             self.enc[c] = i + n
             self.dec[i + n] = c
+        # vocab size is 101
         self.vocab_size = len(self.enc)
             
     def encode(self, x: List[str]) -> List[int]:
