@@ -19,7 +19,7 @@ from tokenizer import Tokenizer
 # %%
 @dataclass
 class GPTConfig:
-    context_len: int = 512
+    context_len: int = 384
     vocab_size: int = 128 
     n_layer: int = 8
     n_head: int = 4
