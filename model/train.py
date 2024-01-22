@@ -222,21 +222,23 @@ def train_fn(
             epoch_loss = loss / dats
             losses[phase].append(epoch_loss)
 
-            if phase == "val" and epoch_loss < best_loss:
-                best_loss = epoch_loss
-                if savepath:
-                    with open(savepath, "wb") as filehandler:
-                        pickle.dump(
-                            {
-                                "best_weight": model.state_dict(),
-                                "best_loss": best_loss,
-                                "losses": losses,
-                                "optimizer": optimizer,
-                                "iter_num": iter_num,
-                            },
-                            filehandler,
-                        )
-                print(f"Best loss found: {best_loss:3.4f}")
+        # Save training state
+        if  losses["val"][-1] < best_loss:
+            best_loss = min(epoch_loss, epoch_loss)
+            print(f"Best loss found: {best_loss:3.4f}")
+            
+        if savepath:
+            with open(savepath, "wb") as filehandler:
+                pickle.dump(
+                    {
+                        "best_weight": model.state_dict(),
+                        "best_loss": best_loss,
+                        "losses": losses,
+                        "optimizer": optimizer,
+                        "iter_num": iter_num,
+                    },
+                    filehandler,
+                )
 
         # Inference test
         model.eval()
