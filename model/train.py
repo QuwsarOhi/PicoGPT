@@ -13,20 +13,8 @@ if hasattr(__builtins__,'__IPYTHON__'):
 else:
     from tqdm import tqdm
 
-from model import GPT
-from tokenizer import Tokenizer
-
-# %%
-@dataclass
-class GPTConfig:
-    context_len: int = 384
-    vocab_size: int = 128 
-    n_layer: int = 8
-    n_head: int = 4
-    n_embd: int = 128
-    dropout: float = 0.05
-    bias: bool = False 
-    
+from model import GPT, GPTConfig
+from tokenizer import Tokenizer    
 
 # %%
 @dataclass

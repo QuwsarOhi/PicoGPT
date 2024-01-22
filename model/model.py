@@ -3,16 +3,16 @@ import torch.nn as nn
 import torch.nn.functional as F
 import inspect
 
-# from dataclasses import dataclass
-# @dataclass
-# class GPTConfig:
-#     context_len: int = 256
-#     vocab_size: int = 128 
-#     n_layer: int = 8
-#     n_head: int = 2
-#     n_embd: int = 64
-#     dropout: float = 0.05
-#     bias: bool = False 
+from dataclasses import dataclass
+@dataclass
+class GPTConfig:
+    context_len: int = 384
+    vocab_size: int = 128 
+    n_layer: int = 8
+    n_head: int = 4
+    n_embd: int = 128
+    dropout: float = 0.05
+    bias: bool = False 
 
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
