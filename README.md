@@ -1,4 +1,4 @@
-# TinyLM
+# TinyGPT
 A simple small language model
 
 
