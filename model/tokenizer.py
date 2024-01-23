@@ -4,7 +4,7 @@ import pickle
 import torch
 
 
-class Tokenizer:
+class TokenizerV1:
     """
     Very simple charachter-level tokenizer.
 
