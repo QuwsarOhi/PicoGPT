@@ -19,9 +19,9 @@ class CPU_Unpickler(pickle.Unpickler):
             return super().find_class(module, name)
 
 
-savepath = os.path.join("..", "logs", "log.pkl")
-#with open(savepath, "rb") as filehandler:
-#    model.load_state_dict(CPU_Unpickler(filehandler).load()["best_weight"])
+savepath = os.path.join(".", "logs", "log.pkl")
+with open(savepath, "rb") as filehandler:
+   model.load_state_dict(CPU_Unpickler(filehandler).load()["best_weight"])
 model.eval()
 
 
