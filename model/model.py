@@ -52,11 +52,8 @@ class CausalSelfAttention(nn.Module):
         self.dropout = config.dropout
 
     def forward(self, x):
-        (
-            B,
-            T,
-            C,
-        ) = x.size()  # batch size, sequence length, embedding dimensionality (n_embd)
+        # batch size, sequence length, embedding dimensionality (n_embd)
+        (B, T, C) = x.size()
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
@@ -127,8 +124,6 @@ class GPT(nn.Module):
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # https://paperswithcode.com/method/weight-tying
         self.transformer.wte.weight = self.lm_head.weight
-        # self.patchmerger = PatchMerger(config.n_embd, 16)
-        # self.patchextend = PatchMerger(config.n_embd, 32)
 
         # init all weights
         self.apply(self._init_weights)
