@@ -35,7 +35,7 @@ class TrainConfig:
     weight_decay = 1e-1
     beta1 = 0.9
     beta2 = 0.95
-    label_smoothing = 0.1
+    label_smoothing = 0.0
 
 
 # %%
@@ -268,4 +268,4 @@ def train_fn(
 
 
 # %%
-train_fn(model, 200000, optimizer, os.path.join(".", "logs", "log.pkl"), "cpu")
+train_fn(model, 200000, optimizer, os.path.join(".", "logs", "log.pkl"), TrainConfig.device)
