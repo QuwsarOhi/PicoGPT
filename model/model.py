@@ -2,41 +2,28 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import inspect
-
 from dataclasses import dataclass
 
 
 @dataclass
 class GPTConfig:
-    context_len: int = 384
+    context_len: int = 256
     vocab_size: int = 128
     n_layer: int = 8
     n_head: int = 4
-    n_embd: int = 128
-    dropout: float = 0.05
-    bias: bool = False
-
-
-class LayerNorm(nn.Module):
-    """LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False"""
-
-    def __init__(self, ndim, bias):
-        super().__init__()
-        self.weight = nn.Parameter(torch.ones(ndim))
-        self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
-
-    def forward(self, input):
-        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
+    n_embd: int = 256
+    dropout: float = 0.0
+    bias: bool = True
 
 
 class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
         # linear is usually multiplied by 4
-        # here we have 2 for efficiency
-        self.c_fc = nn.Linear(config.n_embd, 2 * config.n_embd, bias=config.bias)
+        # here we have 1 for efficiency
+        self.c_fc = nn.Linear(config.n_embd, int(1.0 * config.n_embd), bias=config.bias)
         self.gelu = nn.GELU()
-        self.c_proj = nn.Linear(2 * config.n_embd, config.n_embd, bias=config.bias)
+        self.c_proj = nn.Linear(int(1.0 * config.n_embd), config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
@@ -61,7 +48,6 @@ class CausalSelfAttention(nn.Module):
         # output projection
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # regularization
-        self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
         self.n_head = config.n_head
         self.n_embd = config.n_embd
@@ -76,23 +62,18 @@ class CausalSelfAttention(nn.Module):
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
         q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
-        k = k.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        q = q.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(
-            1, 2
-        )  # (B, nh, T, hs)
+        # (B, nh, T, hs)
+        k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        # (B, nh, T, hs)  
+        q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
+        # (B, nh, T, hs)
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         # efficient attention using Flash Attention CUDA kernels
         # y.shape (B, nh, T, hs)
         y = torch.nn.functional.scaled_dot_product_attention(
-            q,
-            k,
-            v,
+            q, k, v,
             attn_mask=None,
             dropout_p=self.dropout if self.training else 0,
             is_causal=True,
@@ -114,9 +95,9 @@ class CausalSelfAttention(nn.Module):
 class Block(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_1 = nn.LayerNorm(config.n_embd)
         self.attn = CausalSelfAttention(config)
-        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
+        self.ln_2 = nn.LayerNorm(config.n_embd)
         self.mlp = MLP(config)
 
     def forward(self, x):
@@ -141,7 +122,7 @@ class GPT(nn.Module):
                 wpe=nn.Embedding(config.context_len, config.n_embd),
                 drop=nn.Dropout(config.dropout),
                 h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
-                ln_f=LayerNorm(config.n_embd, bias=config.bias),
+                ln_f=nn.LayerNorm(config.n_embd),
             )
         )
 
