@@ -10,7 +10,7 @@ class GPTConfig:
     context_len: int = 128
     vocab_size: int = 128
     n_layer: int = 8
-    n_head: int = 4
+    n_head: int = 8
     n_embd: int = 256
     dropout: float = 0.0
     bias: bool = True
