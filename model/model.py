@@ -7,11 +7,20 @@ from dataclasses import dataclass
 
 @dataclass
 class GPTConfig:
+    # Model parameters: 6.35M [Comparable with MobileNets]
+    # Improves large-sequence word generation 
     context_len: int = 128
+    # Using charachter-level tokenization
     vocab_size: int = 128
+    # Improves overall understanding of text
     n_layer: int = 8
-    n_head: int = 8
+    # Heads gives better understanding of word relation
+    # Avoids common grammar-level mistakes
+    n_head: int = 16
+    # Incresing n_embd gave better word memorization
     n_embd: int = 256
+    # Regularization 
+    # [0.0 for now as we want the model to overfit]
     dropout: float = 0.0
     bias: bool = True
 
