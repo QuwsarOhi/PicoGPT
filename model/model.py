@@ -11,7 +11,7 @@ class GPTConfig:
     vocab_size: int = 128
     n_layer: int = 8
     n_head: int = 4
-    n_embd: int = 384
+    n_embd: int = 256
     dropout: float = 0.0
     bias: bool = True
 
@@ -19,11 +19,9 @@ class GPTConfig:
 class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-        # linear is usually multiplied by 4
-        # here we have 1 for efficiency
-        self.c_fc = nn.Linear(config.n_embd, int(1.5 * config.n_embd), bias=config.bias)
+        self.c_fc = nn.Linear(config.n_embd, int(4 * config.n_embd), bias=config.bias)
         self.gelu = nn.GELU()
-        self.c_proj = nn.Linear(int(1.5 * config.n_embd), config.n_embd, bias=config.bias)
+        self.c_proj = nn.Linear(int(4 * config.n_embd), config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
