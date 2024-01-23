@@ -240,7 +240,7 @@ def train_fn(
 
         # Inference test
         model.eval()
-        x = torch.tensor(tokenizer.encode("he is a"), dtype=torch.int).unsqueeze(0)
+        x = torch.tensor(tokenizer.encode("He is a"), dtype=torch.int).unsqueeze(0)
         print(
             "Inference:",
             "".join(
