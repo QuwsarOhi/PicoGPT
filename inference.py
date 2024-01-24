@@ -10,6 +10,7 @@ from model.tokenizer import Tokenizer
 model = GPT(GPTConfig)
 tokenizer = Tokenizer()
 
+
 # https://github.com/pytorch/pytorch/issues/16797#issuecomment-633423219
 class CPU_Unpickler(pickle.Unpickler):
     def find_class(self, module, name):
@@ -21,7 +22,7 @@ class CPU_Unpickler(pickle.Unpickler):
 
 savepath = os.path.join(".", "logs", "log.pkl")
 with open(savepath, "rb") as filehandler:
-   model.load_state_dict(CPU_Unpickler(filehandler).load()["best_weight"])
+    model.load_state_dict(CPU_Unpickler(filehandler).load()["best_weight"])
 model.eval()
 
 
@@ -43,13 +44,13 @@ def generate(idx, max_new_tokens, temperature=1.0, top_k=None):
         logits, _ = model(idx_cond)
         # pluck the logits at the final step and scale by desired temperature
         logits = logits[:, -1, :] / temperature
-        
+
         # if top_k is not None and top_k == 1:
         #     v, idx_next = torch.topk(logits, min(top_k, logits.size(-1)))
         #     idx = torch.cat((idx, idx_next), dim=1)
         #     print(tokenizer.decode(idx_next[0].tolist())[0], end='')
         #     continue
-        
+
         # optionally crop the logits to only the top k options
         if top_k is not None:
             v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
@@ -68,6 +69,6 @@ while True:
     with torch.inference_mode():
         print("Input: ", end="")
         x = input()
-        x = torch.tensor(tokenizer.encode(x), dtype=torch.int).unsqueeze(0)    
+        x = torch.tensor(tokenizer.encode(x), dtype=torch.int).unsqueeze(0)
         generate(x, max_new_tokens=500, top_k=1)
         print("\nEnded\n")

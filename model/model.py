@@ -8,10 +8,10 @@ from dataclasses import dataclass
 @dataclass
 class GPTConfig:
     # Model parameters: 6.35M [Comparable with MobileNets]
-    # Improves large-sequence word generation 
+    # Improves large-sequence word generation
     context_len: int = 128
     # Using charachter-level tokenization
-    vocab_size: int = 128
+    vocab_size: int = 736
     # Improves overall understanding of text
     n_layer: int = 8
     # Heads gives better understanding of word relation
@@ -19,7 +19,7 @@ class GPTConfig:
     n_head: int = 8
     # Incresing n_embd gave better word memorization
     n_embd: int = 256
-    # Regularization 
+    # Regularization
     # [0.0 for now as we want the model to overfit]
     dropout: float = 0.0
     bias: bool = True
@@ -68,16 +68,18 @@ class CausalSelfAttention(nn.Module):
         q, k, v = self.c_attn(x).split(self.n_embd, dim=2)
         # (B, nh, T, hs)
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
-        # (B, nh, T, hs)  
+        # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
         # (B, nh, T, hs)
-        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  
+        v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
         # efficient attention using Flash Attention CUDA kernels
         # y.shape (B, nh, T, hs)
         y = torch.nn.functional.scaled_dot_product_attention(
-            q, k, v,
+            q,
+            k,
+            v,
             attn_mask=None,
             dropout_p=self.dropout if self.training else 0,
             is_causal=True,
@@ -166,7 +168,7 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None, closs_weight=None, label_smoothing=None):
+    def forward(self, idx, targets=None, label_smoothing=None):
         device = idx.device
         b, t = idx.size()
         assert (
@@ -193,7 +195,6 @@ class GPT(nn.Module):
             loss = F.cross_entropy(
                 logits.view(-1, logits.size(-1)),
                 targets.view(-1),
-                weight=closs_weight,
                 ignore_index=-1,
                 label_smoothing=label_smoothing,
             )
@@ -205,19 +206,6 @@ class GPT(nn.Module):
             loss = None
 
         return logits, loss
-
-    def crop_block_size(self, context_len):
-        # model surgery to decrease the block size if necessary
-        # e.g. we may load the GPT2 pretrained model checkpoint (block size 1024)
-        # but want to use a smaller block size for some smaller, simpler model
-        assert context_len <= self.config.context_len
-        self.config.context_len = context_len
-        self.transformer.wpe.weight = nn.Parameter(
-            self.transformer.wpe.weight[:context_len]
-        )
-        for block in self.transformer.h:
-            if hasattr(block.attn, "bias"):
-                block.attn.bias = block.attn.bias[:, :, :context_len, :context_len]
 
     def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
         # start with all of the candidate parameters
