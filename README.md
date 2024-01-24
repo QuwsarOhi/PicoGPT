@@ -1,4 +1,4 @@
-# ShallowGPT
+# PicoGPT
 A simple small language model
 
 
