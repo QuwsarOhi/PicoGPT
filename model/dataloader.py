@@ -26,6 +26,7 @@ class TinyShakespere:
 
 # %%
 
+
 class WikiData:
     def __init__(self, tokenizer):
         self.wiki_data = load_dataset("wikipedia", "20220301.en")

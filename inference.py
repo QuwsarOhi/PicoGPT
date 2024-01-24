@@ -4,11 +4,10 @@ import io
 import os
 import torch.nn.functional as F
 from model.model import GPT, GPTConfig
-from model.tokenizer import Tokenizer
-
+from model.tokenizer import TokenizerV2
 
 model = GPT(GPTConfig)
-tokenizer = Tokenizer()
+tokenizer = TokenizerV2()
 
 
 # https://github.com/pytorch/pytorch/issues/16797#issuecomment-633423219

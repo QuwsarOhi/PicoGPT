@@ -1,4 +1,3 @@
-# %%
 import torch
 import torch.nn as nn
 from dataclasses import dataclass
@@ -8,13 +7,11 @@ import pickle
 import math
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-
 from model.model import GPT, GPTConfig
 from model.tokenizer import TokenizerV2
 from model.dataloader import TinyShakespere, WikiData
 
 
-# %%
 @dataclass
 class TrainConfig:
     batch_size: int = 8
@@ -32,6 +29,7 @@ class TrainConfig:
     beta1 = 0.9
     beta2 = 0.95
     label_smoothing = 0.0
+
 
 # Loading dataset
 tokenizer = TokenizerV2()
@@ -52,6 +50,7 @@ optimizer = model.configure_optimizers(
     (TrainConfig.beta1, TrainConfig.beta2),
     TrainConfig.device,
 )
+
 
 def get_lr(it):
     # 1) linear warmup for warmup_iters steps
@@ -195,7 +194,4 @@ def train_fn(
 
 
 # %%
-train_fn(model, 
-         200000, 
-         optimizer, 
-         os.path.join(".", "logs", "log.pkl"))
+train_fn(model, 200000, optimizer, os.path.join(".", "logs", "log.pkl"))
