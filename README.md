@@ -1,4 +1,4 @@
-# TinyGPT
+# ShallowGPT
 A simple small language model
 
 
