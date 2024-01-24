@@ -8,7 +8,7 @@ import math
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 from model.model import GPT, GPTConfig
-from model.tokenizer import TokenizerV2
+from model.tokenizer import Tokenizer
 from model.dataloader import TinyShakespere, WikiData
 
 
@@ -32,7 +32,7 @@ class TrainConfig:
 
 
 # Loading dataset
-tokenizer = TokenizerV2()
+tokenizer = Tokenizer()
 dataset = "WikiData"
 
 if dataset == "WikiData":

@@ -11,7 +11,8 @@ class GPTConfig:
     # Improves large-sequence word generation
     context_len: int = 128
     # Using charachter-level tokenization
-    vocab_size: int = 736
+    # Actual vocab-size is 75, saving some tokens for future use
+    vocab_size: int = 88
     # Improves overall understanding of text
     n_layer: int = 8
     # Heads gives better understanding of word relation
