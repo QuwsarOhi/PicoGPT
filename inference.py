@@ -55,13 +55,15 @@ def generate(idx, max_new_tokens, temperature=1.0, top_k=None):
         idx_next = torch.multinomial(probs, num_samples=1)
         # append sampled index to the running sequence and continue
         idx = torch.cat((idx, idx_next), dim=1)
-        print(tokenizer.decode(idx_next[0].tolist())[0], end="")
+        tok = tokenizer.decode(idx_next[0].tolist())[0]
+        print(tok, end="")
+        if tok == '.':
+            return
 
 
 while True:
-    with torch.inference_mode():
-        print("Input: ", end="")
-        x = input()
-        x = torch.tensor(tokenizer.encode(x), dtype=torch.int).unsqueeze(0)
-        generate(x, max_new_tokens=500, top_k=5)
-        print("\nEnded\n")
+    print("Input: ", end="")
+    x = input()
+    x = torch.tensor(tokenizer.encode(x), dtype=torch.long).unsqueeze(0)
+    generate(x, max_new_tokens=128, temperature=0.5)
+    print("\nEnded\n")
