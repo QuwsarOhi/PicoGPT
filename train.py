@@ -31,27 +31,6 @@ class TrainConfig:
     label_smoothing = 0.0
 
 
-# Loading dataset
-tokenizer = Tokenizer()
-dataset = "WikiData"
-
-if dataset == "WikiData":
-    data = WikiData(tokenizer)
-elif dataset == "TinyShakespere":
-    data = TinyShakespere(tokenizer)
-else:
-    raise ValueError(f"Invalid dataset name {dataset}")
-
-
-model = GPT(GPTConfig)
-optimizer = model.configure_optimizers(
-    TrainConfig.weight_decay,
-    TrainConfig.learning_rate,
-    (TrainConfig.beta1, TrainConfig.beta2),
-    TrainConfig.device,
-)
-
-
 def get_lr(it):
     # 1) linear warmup for warmup_iters steps
     if it < TrainConfig.warmup_iters:
@@ -193,5 +172,24 @@ def train_fn(
     print(f"Best loss: {best_loss:3.4f}")
 
 
-# %%
-train_fn(model, 200000, optimizer, os.path.join(".", "logs", "log.pkl"))
+if __name__ == "__main__":
+    # Loading dataset
+    tokenizer = Tokenizer()
+    dataset = "WikiData"
+
+    if dataset == "WikiData":
+        data = WikiData(tokenizer)
+    elif dataset == "TinyShakespere":
+        data = TinyShakespere(tokenizer)
+    else:
+        raise ValueError(f"Invalid dataset name {dataset}")
+
+    model = GPT(GPTConfig)
+    optimizer = model.configure_optimizers(
+        TrainConfig.weight_decay,
+        TrainConfig.learning_rate,
+        (TrainConfig.beta1, TrainConfig.beta2),
+        TrainConfig.device,
+    )
+
+    train_fn(model, 300, optimizer, os.path.join(".", "logs", "log.pkl"))

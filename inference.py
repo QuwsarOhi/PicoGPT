@@ -9,7 +9,6 @@ from model.tokenizer import Tokenizer
 model = GPT(GPTConfig)
 tokenizer = Tokenizer()
 
-
 # https://github.com/pytorch/pytorch/issues/16797#issuecomment-633423219
 class CPU_Unpickler(pickle.Unpickler):
     def find_class(self, module, name):
@@ -58,7 +57,9 @@ def generate(idx, max_new_tokens, temperature=1.0, top_k=None):
         tok = tokenizer.decode(idx_next[0].tolist())[0]
         print(tok, end="")
         if tok == '.':
+            print()
             return
+    print("\n<STRIPPED>\n")
 
 
 while True:
@@ -66,4 +67,3 @@ while True:
     x = input()
     x = torch.tensor(tokenizer.encode(x), dtype=torch.long).unsqueeze(0)
     generate(x, max_new_tokens=128, temperature=0.5)
-    print("\n<STRIPPED>\n")
