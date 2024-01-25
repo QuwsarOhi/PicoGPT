@@ -44,12 +44,6 @@ def generate(idx, max_new_tokens, temperature=1.0, top_k=None):
         # pluck the logits at the final step and scale by desired temperature
         logits = logits[:, -1, :] / temperature
 
-        # if top_k is not None and top_k == 1:
-        #     v, idx_next = torch.topk(logits, min(top_k, logits.size(-1)))
-        #     idx = torch.cat((idx, idx_next), dim=1)
-        #     print(tokenizer.decode(idx_next[0].tolist())[0], end='')
-        #     continue
-
         # optionally crop the logits to only the top k options
         if top_k is not None:
             v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
@@ -69,5 +63,5 @@ while True:
         print("Input: ", end="")
         x = input()
         x = torch.tensor(tokenizer.encode(x), dtype=torch.int).unsqueeze(0)
-        generate(x, max_new_tokens=500, top_k=1)
+        generate(x, max_new_tokens=500, top_k=2)
         print("\nEnded\n")

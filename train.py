@@ -171,7 +171,7 @@ def train_fn(
             "Inference:",
             "".join(
                 tokenizer.decode(
-                    model.generate(x, max_new_tokens=500, top_k=1).detach()[0].tolist()
+                    model.generate(x, max_new_tokens=500, top_k=5).detach()[0].tolist()
                 )
             ),
         )

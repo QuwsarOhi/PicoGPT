@@ -5,16 +5,19 @@ from typing import List
 class Tokenizer:
     """
     Very simple charachter-level tokenizer.
+    Converts char to integer and the opposite.
 
     This tokenizer only maps printable ASCII charachters to integers.
     There are a total of 100 printable charachters in ASCII table.
     The list of printable charachters are generated from: string.printable
+    The capitalized charachters are ignored.
+    Resulting a total of 74 printable charachters.
 
     Special tokens:
     <?> is considered as special token, which is also known as unknown token.
     Otherwise there is no other special tokens.
 
-    Although there are 101 tokens (including <?>) GPT predicts 128 tokens.
+    Although there are 75 tokens (including <?>) GPT predicts 88 tokens.
     The rest of the tokens are kept for future processing (if required).
 
     Parameters:
