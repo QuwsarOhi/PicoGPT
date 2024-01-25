@@ -63,5 +63,5 @@ while True:
         print("Input: ", end="")
         x = input()
         x = torch.tensor(tokenizer.encode(x), dtype=torch.int).unsqueeze(0)
-        generate(x, max_new_tokens=500, top_k=2)
+        generate(x, max_new_tokens=500, top_k=5)
         print("\nEnded\n")
