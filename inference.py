@@ -66,4 +66,4 @@ while True:
     x = input()
     x = torch.tensor(tokenizer.encode(x), dtype=torch.long).unsqueeze(0)
     generate(x, max_new_tokens=128, temperature=0.5)
-    print("\nEnded\n")
+    print("\n<STRIPPED>\n")
