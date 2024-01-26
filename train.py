@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from model.model import GPT, GPTConfig
 from model.tokenizer import Tokenizer
-from model.dataloader import TinyShakespere, WikiData
+from model.dataloader import TinyShakespere, WikiData, TinyTextBook
 
 
 @dataclass
@@ -176,12 +176,14 @@ def train_fn(
 if __name__ == "__main__":
     # Loading dataset
     tokenizer = Tokenizer()
-    dataset = "WikiData"
+    dataset = "TinyTextBook"
 
     if dataset == "WikiData":
         data = WikiData(tokenizer)
     elif dataset == "TinyShakespere":
         data = TinyShakespere(tokenizer)
+    elif dataset == "TinyTextBook":
+        data = TinyTextBook(tokenizer)
     else:
         raise ValueError(f"Invalid dataset name {dataset}")
 
@@ -192,5 +194,5 @@ if __name__ == "__main__":
         (TrainConfig.beta1, TrainConfig.beta2),
         TrainConfig.device,
     )
-
-    train_fn(model, 300, optimizer, os.path.join(".", "logs", "log.pkl"))
+    
+    train_fn(model, 300, optimizer, os.path.join(".", "logs", "tinytextbook", "log.pkl"))

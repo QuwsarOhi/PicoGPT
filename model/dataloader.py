@@ -24,23 +24,20 @@ class TinyShakespere:
         return x, y
 
 
-# %%
-
-
 class WikiData:
     def __init__(self, tokenizer):
-        self.wiki_data = load_dataset("wikipedia", "20220301.en")
+        self.data = load_dataset("wikipedia", "20220301.en")["train"]
         self.tokenizer = tokenizer
-        self.train_idx = int(0.95 * len(self.wiki_data["train"]))
+        self.train_idx = int(0.95 * len(self.data))
 
     def get_batch(self, split, batch_size, device):
         # generate a small batch of data of inputs x and targets y
-        N = len(self.wiki_data["train"])
+        N = len(self.data)
 
         while True:
             lo = 0 if split == "train" else self.train_idx
             hi = self.train_idx if split == "train" else N
-            data = self.wiki_data["train"][torch.randint(low=lo, high=hi, size=(1,))][
+            data = self.data[torch.randint(low=lo, high=hi, size=(1,))][
                 "text"
             ][0]
             if len(data) - GPTConfig.context_len > 0:
@@ -63,4 +60,20 @@ class WikiData:
         return x, y
 
 
-# print(get_batch())
+
+class TinyTextBook(WikiData):
+    # Huggingface: https://huggingface.co/datasets/nampdn-ai/tiny-strange-textbooks
+    def __init__(self, tokenizer):
+        #from huggingface_hub import login
+        self.data = load_dataset("nampdn-ai/tiny-strange-textbooks")["train"]
+        self.tokenizer = tokenizer
+        self.train_idx = int(0.95 * len(self.data))
+        
+        
+if __name__ == "__main__":
+    from tokenizer import Tokenizer
+    data = TinyTextBook(Tokenizer())
+    
+    print(data.get_batch("train", 8, 'cpu'))
+    print(data.get_batch("test", 8, 'cpu'))
+        
