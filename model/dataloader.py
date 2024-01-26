@@ -67,7 +67,10 @@ class TinyTextBook(WikiData):
         #from huggingface_hub import login
         self.data = load_dataset("nampdn-ai/tiny-strange-textbooks")["train"]
         self.tokenizer = tokenizer
-        self.train_idx = int(0.95 * len(self.data))
+        self.train_idx = len(self.data)
+        
+    def get_batch(self, split, batch_size, device):
+        return super().get_batch("train", batch_size, device)
         
         
 if __name__ == "__main__":
