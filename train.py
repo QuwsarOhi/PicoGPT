@@ -20,7 +20,7 @@ class TrainConfig:
         if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
         else "float16"
     )
-    device: str = "gpu" if torch.cuda.is_available() else "cpu"
+    device: str = "cuda" if torch.cuda.is_available() else "cpu"
     warmup_iters = 2000
     learning_rate = 6e-4
     lr_decay_iters = 600000
@@ -145,7 +145,8 @@ def train_fn(
 
         # Inference test
         model.eval()
-        x = torch.tensor(tokenizer.encode("He is a"), dtype=torch.int).unsqueeze(0)
+        x = torch.tensor(tokenizer.encode("He is a"), dtype=torch.int,
+                         device=TrainConfig.device).unsqueeze(0)
         print(
             "Inference:",
             "".join(
@@ -184,7 +185,7 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Invalid dataset name {dataset}")
 
-    model = GPT(GPTConfig)
+    model = GPT(GPTConfig).to(TrainConfig.device)
     optimizer = model.configure_optimizers(
         TrainConfig.weight_decay,
         TrainConfig.learning_rate,
