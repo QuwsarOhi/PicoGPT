@@ -7,10 +7,17 @@ import pickle
 import math
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from model.model import GPT, GPTConfig
-from model.tokenizer import Tokenizer
-from model.dataloader import TinyShakespere, WikiData, TinyTextBook
+from components.model import GPT, GPTConfig
+from components.tokenizer import Tokenizer
+from components.dataloader import TinyShakespere, WikiData, TinyTextBook, OpenOrca
+from argparse import ArgumentParser
 
+# Argument parsing
+parser = ArgumentParser()
+parser.add_argument("--init_weight", type=str, default=None)
+parser.add_argument("--fix_lr", type=bool, default=True)
+parser.add_argument("--dataset", type=str, default="TinyTextBook")
+args, leftovers = parser.parse_known_args()
 
 @dataclass
 class TrainConfig:
@@ -29,6 +36,7 @@ class TrainConfig:
     beta1 = 0.9
     beta2 = 0.95
     label_smoothing = 0.0
+    fixed_learning_rate = 3e-5 if args.fix_lr else None
 
 
 def get_lr(it):
@@ -99,7 +107,6 @@ def train_fn(
                     _, batch_loss = model(
                         x,
                         y,
-                        # closs_weight=tokenizer.weight if is_training else None,
                         label_smoothing=TrainConfig.label_smoothing
                         if is_training
                         else 0.0,
@@ -110,10 +117,14 @@ def train_fn(
                         optimizer.step()
                         optimizer.zero_grad(set_to_none=True)
                         # LR scheduler
-                        lr = get_lr(iter_num)
+                        # only update lr when it is not fixed
+                        if TrainConfig.fixed_learning_rate is None:
+                            lr = get_lr(iter_num)
+                            for param_group in optimizer.param_groups:
+                                param_group["lr"] = lr
+                        else:
+                            lr = TrainConfig.fixed_learning_rate
                         iter_num += 1
-                        for param_group in optimizer.param_groups:
-                            param_group["lr"] = lr
 
                 # Stats
                 dats += x.size(0)
@@ -176,23 +187,33 @@ def train_fn(
 if __name__ == "__main__":
     # Loading dataset
     tokenizer = Tokenizer()
-    dataset = "TinyTextBook"
 
-    if dataset == "WikiData":
+    if args.dataset == "WikiData":
         data = WikiData(tokenizer)
-    elif dataset == "TinyShakespere":
+    elif args.dataset == "TinyShakespere":
         data = TinyShakespere(tokenizer)
-    elif dataset == "TinyTextBook":
+    elif args.dataset == "TinyTextBook":
         data = TinyTextBook(tokenizer)
+    elif args.dataset == "OpenOrca":
+        data = OpenOrca(tokenizer)
     else:
-        raise ValueError(f"Invalid dataset name {dataset}")
+        raise ValueError(f"Invalid dataset name {args.dataset}")
+    print(f"Training on {args.dataset} dataset")
 
     model = GPT(GPTConfig).to(TrainConfig.device)
     optimizer = model.configure_optimizers(
         TrainConfig.weight_decay,
-        TrainConfig.learning_rate,
+        TrainConfig.fixed_learning_rate if TrainConfig.fixed_learning_rate else TrainConfig.learning_rate,
         (TrainConfig.beta1, TrainConfig.beta2),
         TrainConfig.device,
     )
     
-    train_fn(model, 300, optimizer, os.path.join(".", "logs", "tinytextbook", "log.pkl"))
+    if args.init_weight is not None:
+        init_path = os.path.join('.', 'logs', args.init_weight, 'log.pkl')
+        with open(init_path, "rb") as filehandler:
+            prev_train = CPU_Unpickler(filehandler).load()
+            best_weight = prev_train["best_weight"]
+            model.load_state_dict(best_weight, strict=True)
+        print(f"Loaded weight form {init_path}")
+        
+    train_fn(model, 300, optimizer, os.path.join(".", "logs", args.dataset.lower(), "log.pkl"))
