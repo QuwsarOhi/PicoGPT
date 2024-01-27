@@ -23,13 +23,13 @@ class Tokenizer:
     Parameters:
     -----------
         specials: A list of special tokens if required. <?> is a special uknown token.
-        
+
         <?>  [0] : Unknown character
-        <P>  [75]: Padding  
-        <S>  [76]: System prompt start, 
+        <P>  [75]: Padding
+        <S>  [76]: System prompt start,
         </S> [77]: System prompt end
         <Q>  [78]: Question start
-        </Q> [79]: Question end 
+        </Q> [79]: Question end
         <A>  [80]: Answer start
         </A> [81]: Answer end
 
@@ -39,7 +39,9 @@ class Tokenizer:
     # A trick to save memory
     __slots__ = ["vocab_size", "enc", "dec"]
 
-    def __init__(self, specials: List[str] = ["<P>", "<S>", "</S>", "<Q>", "</Q>", "<A>", "</A>"]) -> None:
+    def __init__(
+        self, specials: List[str] = ["<P>", "<S>", "</S>", "<Q>", "</Q>", "<A>", "</A>"]
+    ) -> None:
         self.__build(specials)
 
     def __build(self, specials):
@@ -57,7 +59,7 @@ class Tokenizer:
         for c in specials:
             self.enc[c] = self.vocab_size
             self.dec[self.vocab_size] = c
-            #print(c, '->', self.vocab_size)
+            # print(c, '->', self.vocab_size)
             self.vocab_size += 1
 
     def encode(self, x: List[str]) -> List[int]:

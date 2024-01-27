@@ -16,6 +16,7 @@ args, leftovers = parser.parse_known_args()
 model = GPT(GPTConfig)
 tokenizer = Tokenizer()
 
+
 # https://github.com/pytorch/pytorch/issues/16797#issuecomment-633423219
 class CPU_Unpickler(pickle.Unpickler):
     def find_class(self, module, name):
@@ -29,6 +30,7 @@ savepath = os.path.join(".", "logs", args.weight, "log.pkl")
 with open(savepath, "rb") as filehandler:
     model.load_state_dict(CPU_Unpickler(filehandler).load()["best_weight"])
 model.eval()
+
 
 @torch.inference_mode
 def generate(idx, max_new_tokens, temperature=1.0, top_k=None):
@@ -62,7 +64,7 @@ def generate(idx, max_new_tokens, temperature=1.0, top_k=None):
         idx = torch.cat((idx, idx_next), dim=1)
         tok = tokenizer.decode(idx_next[0].tolist())[0]
         print(tok, end="")
-        if tok == '.':
+        if tok == ".":
             print()
             return
     print("\n<STRIPPED>\n")
@@ -72,13 +74,21 @@ while True:
     print("Input: ", end="")
     x = input()
     x = tokenizer.encode(x)
-    
+
     if args.chat:
-        x = [76] + \
-            tokenizer.encode("You are an AI assistant. You will be given a task. You must generate a detailed and long answer.") + \
-            [77] + tokenizer.encode("\n") + \
-            [78] + x + [79] + tokenizer.encode("\n") \
+        x = (
+            [76]
+            + tokenizer.encode(
+                "You are an AI assistant. You will be given a task. You must generate a detailed and long answer."
+            )
+            + [77]
+            + tokenizer.encode("\n")
+            + [78]
+            + x
+            + [79]
+            + tokenizer.encode("\n")
             + [80]
-            
+        )
+
     x = torch.tensor(x, dtype=torch.long).unsqueeze(0)
     generate(x, max_new_tokens=128, temperature=0.5)

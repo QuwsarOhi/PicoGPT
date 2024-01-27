@@ -12,6 +12,7 @@ from components.tokenizer import Tokenizer
 from components.dataloader import TinyShakespere, WikiData, TinyTextBook, OpenOrca
 from argparse import ArgumentParser
 
+
 # Argument parsing
 parser = ArgumentParser()
 parser.add_argument("--init_weight", type=str, default=None)
@@ -19,14 +20,10 @@ parser.add_argument("--fix_lr", type=bool, default=True)
 parser.add_argument("--dataset", type=str, default="TinyTextBook")
 args, leftovers = parser.parse_known_args()
 
+
 @dataclass
 class TrainConfig:
     batch_size: int = 8
-    dtype: str = (
-        "bfloat16"
-        if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
-        else "float16"
-    )
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     warmup_iters = 2000
     learning_rate = 6e-4
@@ -156,13 +153,16 @@ def train_fn(
 
         # Inference test
         model.eval()
-        x = torch.tensor(tokenizer.encode("He is a"), dtype=torch.int,
-                         device=TrainConfig.device).unsqueeze(0)
+        x = torch.tensor(
+            tokenizer.encode("He is a"), dtype=torch.int, device=TrainConfig.device
+        ).unsqueeze(0)
         print(
             "Inference:",
             "".join(
                 tokenizer.decode(
-                    model.generate(x, max_new_tokens=500, temperature=0.5).detach()[0].tolist()
+                    model.generate(x, max_new_tokens=500, temperature=0.5)
+                    .detach()[0]
+                    .tolist()
                 )
             ),
         )
@@ -188,13 +188,13 @@ if __name__ == "__main__":
     # Loading dataset
     tokenizer = Tokenizer()
 
-    if args.dataset == "WikiData":
+    if args.dataset.lower() == "wikidata":
         data = WikiData(tokenizer)
-    elif args.dataset == "TinyShakespere":
+    elif args.dataset.lower() == "tinyshakespere":
         data = TinyShakespere(tokenizer)
-    elif args.dataset == "TinyTextBook":
+    elif args.dataset.lower() == "tinytextbook":
         data = TinyTextBook(tokenizer)
-    elif args.dataset == "OpenOrca":
+    elif args.dataset.lower() == "openorca":
         data = OpenOrca(tokenizer)
     else:
         raise ValueError(f"Invalid dataset name {args.dataset}")
@@ -203,17 +203,23 @@ if __name__ == "__main__":
     model = GPT(GPTConfig).to(TrainConfig.device)
     optimizer = model.configure_optimizers(
         TrainConfig.weight_decay,
-        TrainConfig.fixed_learning_rate if TrainConfig.fixed_learning_rate else TrainConfig.learning_rate,
+        TrainConfig.fixed_learning_rate
+        if TrainConfig.fixed_learning_rate
+        else TrainConfig.learning_rate,
         (TrainConfig.beta1, TrainConfig.beta2),
         TrainConfig.device,
     )
-    
+
     if args.init_weight is not None:
-        init_path = os.path.join('.', 'logs', args.init_weight, 'log.pkl')
+        init_path = os.path.join(".", "logs", args.init_weight, "log.pkl")
         with open(init_path, "rb") as filehandler:
             prev_train = CPU_Unpickler(filehandler).load()
-            best_weight = prev_train["best_weight"]
-            model.load_state_dict(best_weight, strict=True)
+            model.load_state_dict(prev_train["best_weight"], strict=True)
         print(f"Loaded weight form {init_path}")
-        
-    train_fn(model, 300, optimizer, os.path.join(".", "logs", args.dataset.lower(), "log.pkl"))
+
+    train_fn(
+        model,
+        300,
+        optimizer,
+        os.path.join(".", "logs", args.dataset.lower(), "log.pkl"),
+    )

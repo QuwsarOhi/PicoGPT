@@ -37,9 +37,7 @@ class WikiData:
         while True:
             lo = 0 if split == "train" else self.train_idx
             hi = self.train_idx if split == "train" else N
-            data = self.data[torch.randint(low=lo, high=hi, size=(1,))][
-                "text"
-            ][0]
+            data = self.data[torch.randint(low=lo, high=hi, size=(1,))]["text"][0]
             if len(data) - GPTConfig.context_len > 0:
                 break
 
@@ -47,27 +45,28 @@ class WikiData:
 
         x = torch.tensor(
             [self.tokenizer.encode(data[i : i + GPTConfig.context_len]) for i in ix],
-            dtype=torch.long, device=device
+            dtype=torch.long,
+            device=device,
         )
         y = torch.tensor(
             [
                 self.tokenizer.encode(data[i + 1 : i + GPTConfig.context_len + 1])
                 for i in ix
             ],
-            dtype=torch.long, device=device
+            dtype=torch.long,
+            device=device,
         )
         return x, y
-
 
 
 class TinyTextBook(WikiData):
     # Huggingface: https://huggingface.co/datasets/nampdn-ai/tiny-strange-textbooks
     def __init__(self, tokenizer):
-        #from huggingface_hub import login
+        # from huggingface_hub import login
         self.data = load_dataset("nampdn-ai/tiny-strange-textbooks")["train"]
         self.tokenizer = tokenizer
         self.train_idx = len(self.data)
-        
+
     def get_batch(self, split, batch_size, device):
         return super().get_batch("train", batch_size, device)
 
@@ -82,78 +81,87 @@ class OpenOrca:
         self.text = ""
         self.tokenizer = tokenizer
         self.step()
-        
-        
+
     def process(self, idx):
         """
         Tokens:
         <?>  [0] : Unknown character
-        <P>  [75]: Padding  
-        <S>  [76]: System prompt start, 
+        <P>  [75]: Padding
+        <S>  [76]: System prompt start,
         </S> [77]: System prompt end
         <Q>  [78]: Question start
-        </Q> [79]: Question end 
+        </Q> [79]: Question end
         <A>  [80]: Answer start
         </A> [81]: Answer end
-        
+
         Processes the strings as follows:
         <S>SYSTEM_PROMPT</S>
         <Q>QUESTION</Q>
         <A>ANSWER</A>
         """
         data = self.data[idx]
-        self.text = [76] + self.tokenizer.encode(data['system_prompt']) + [77] + self.tokenizer.encode("\n") + \
-            [78] + self.tokenizer.encode(data['question']) + [79] + self.tokenizer.encode("\n") + \
-            [80] + self.tokenizer.encode(data['response']) + [81]
-    
+        self.text = (
+            [76]
+            + self.tokenizer.encode(data["system_prompt"])
+            + [77]
+            + self.tokenizer.encode("\n")
+            + [78]
+            + self.tokenizer.encode(data["question"])
+            + [79]
+            + self.tokenizer.encode("\n")
+            + [80]
+            + self.tokenizer.encode(data["response"])
+            + [81]
+        )
+
     def step(self):
         self.idx = (self.idx + 1) % self.len
         self.pos = 0
-        self.process(self.idx)  
-        
+        self.process(self.idx)
+
     def get_batch(self, split, batch_size, device):
         x, y = [], []
         for i in range(batch_size):
             if self.pos >= len(self.text):
                 self.step()
-                
+
             x.append(self.text[self.pos : self.pos + GPTConfig.context_len])
             y.append(self.text[self.pos + 1 : self.pos + GPTConfig.context_len + 1])
-            
+
             # Padding
             pad = False
-            
+
             while len(x[-1]) < GPTConfig.context_len:
                 x[-1].append(75)
                 pad = True
-            
+
             while len(y[-1]) < GPTConfig.context_len:
                 y[-1].append(75)
                 pad = True
-            
+
             self.pos += 1
             if pad:
                 self.step()
-            
+
         return (
             torch.tensor(x, dtype=torch.long, device=device),
-            torch.tensor(y, dtype=torch.long, device=device)
+            torch.tensor(y, dtype=torch.long, device=device),
         )
-            
-        
+
+
 if __name__ == "__main__":
     from tokenizer import Tokenizer
+
     tokenizer = Tokenizer()
     data = OpenOrca(tokenizer)
-    
-    t, s = data.get_batch("train", 2, 'cpu')
-    #print(t)
-    
+
+    t, s = data.get_batch("train", 2, "cpu")
+    # print(t)
+
     for x, y in zip(t, s):
         x, y = x.tolist(), y.tolist()
         print("".join(tokenizer.decode(x)), "=", "".join(tokenizer.decode(y)))
-        print("-+"*20)
-    
-    #print(data.get_batch("train", 8, 'cpu'))
-    #print(data.get_batch("test", 8, 'cpu'))
-        
+        print("-+" * 20)
+
+    # print(data.get_batch("train", 8, 'cpu'))
+    # print(data.get_batch("test", 8, 'cpu'))
