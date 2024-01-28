@@ -9,7 +9,7 @@ from argparse import ArgumentParser
 
 # Argument parsing
 parser = ArgumentParser()
-parser.add_argument("--weight", type=str, default="tinytextbook")
+parser.add_argument("--weight", type=str, default="openorca")
 parser.add_argument("--chat", type=bool, default=False)
 args, leftovers = parser.parse_known_args()
 
