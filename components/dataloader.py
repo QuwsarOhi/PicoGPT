@@ -38,19 +38,19 @@ class WikiData:
             lo = 0 if split == "train" else self.train_idx
             hi = self.train_idx if split == "train" else N
             data = self.data[torch.randint(low=lo, high=hi, size=(1,))]["text"][0]
-            if len(data) - GPTConfig.context_len > 0:
+            if len(data) - GPTConfig.context_len * 8 > 0:
                 break
 
-        ix = torch.randint(len(data) - GPTConfig.context_len, (batch_size,))
+        ix = torch.randint(len(data) - GPTConfig.context_len * 8, (batch_size,))
 
         x = torch.tensor(
-            [self.tokenizer.encode(data[i : i + GPTConfig.context_len]) for i in ix],
+            [self.tokenizer.encode(data[i : i + GPTConfig.context_len * 8]) for i in ix],
             dtype=torch.long,
             device=device,
         )
         y = torch.tensor(
             [
-                self.tokenizer.encode(data[i + 1 : i + GPTConfig.context_len + 1])
+                self.tokenizer.encode(data[i + 1 : i + GPTConfig.context_len * 8 + 1])
                 for i in ix
             ],
             dtype=torch.long,

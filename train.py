@@ -17,7 +17,7 @@ from argparse import ArgumentParser
 parser = ArgumentParser()
 parser.add_argument("--init_weight", type=str, default=None)
 parser.add_argument("--fix_lr", type=bool, default=True)
-parser.add_argument("--dataset", type=str, default="OpenOrca")
+parser.add_argument("--dataset", type=str, default="tinytextbook")
 args, leftovers = parser.parse_known_args()
 
 
@@ -33,7 +33,7 @@ class TrainConfig:
     beta1 = 0.9
     beta2 = 0.95
     label_smoothing = 0.0
-    fixed_learning_rate = 1e-5 if args.fix_lr else None
+    fixed_learning_rate = 3e-5 if args.fix_lr else None
 
 
 def get_lr(it):
@@ -101,7 +101,7 @@ def train_fn(
                 x, y = data.get_batch(phase, TrainConfig.batch_size, TrainConfig.device)
 
                 with torch.set_grad_enabled(phase == "train"):
-                    _, batch_loss = model(
+                    _, batch_loss = model.forwardV2(
                         x,
                         y,
                         label_smoothing=TrainConfig.label_smoothing
@@ -187,7 +187,8 @@ def train_fn(
 if __name__ == "__main__":
     # Loading dataset
     tokenizer = Tokenizer()
-
+    print(f"Training on {args.dataset} dataset")
+    
     if args.dataset.lower() == "wikidata":
         data = WikiData(tokenizer)
     elif args.dataset.lower() == "tinyshakespere":
@@ -198,7 +199,7 @@ if __name__ == "__main__":
         data = OpenOrca(tokenizer)
     else:
         raise ValueError(f"Invalid dataset name {args.dataset}")
-    print(f"Training on {args.dataset} dataset")
+    
 
     model = GPT(GPTConfig).to(TrainConfig.device)
     optimizer = model.configure_optimizers(

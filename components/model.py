@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import inspect
+import copy
 from dataclasses import dataclass
 
 
@@ -121,19 +122,21 @@ class Block(nn.Module):
 class GPT(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.config = config
+        self.config = copy.deepcopy(config)
+        # preserving one token for previous context
 
         self.transformer = nn.ModuleDict(
             dict(
-                wte=nn.Embedding(config.vocab_size, config.n_embd),
-                wpe=nn.Embedding(config.context_len, config.n_embd),
-                drop=nn.Dropout(config.dropout),
-                h=nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
-                ln_f=nn.LayerNorm(config.n_embd),
+                wte=nn.Embedding(self.config.vocab_size, self.config.n_embd),
+                # preserving one extra context position for previous context embedding
+                wpe=nn.Embedding(self.config.context_len + 1, self.config.n_embd),
+                drop=nn.Dropout(self.config.dropout),
+                h=nn.ModuleList([Block(self.config) for _ in range(self.config.n_layer)]),
+                ln_f=nn.LayerNorm(self.config.n_embd),
             )
         )
 
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        self.lm_head = nn.Linear(self.config.n_embd, self.config.vocab_size, bias=False)
         # https://paperswithcode.com/method/weight-tying
         self.transformer.wte.weight = self.lm_head.weight
 
@@ -143,9 +146,8 @@ class GPT(nn.Module):
         for pn, p in self.named_parameters():
             if pn.endswith("c_proj.weight"):
                 torch.nn.init.normal_(
-                    p, mean=0.0, std=0.02 / ((2 * config.n_layer) ** 0.5)
+                    p, mean=0.0, std=0.02 / ((2 * self.config.n_layer) ** 0.5)
                 )
-
         # report number of parameters
         print("number of parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
@@ -168,15 +170,70 @@ class GPT(nn.Module):
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+                 
+    def forwardV2(self, idx, targets=None):
+        """
+        Encodes context as long as it is big
+        Slide a window of size context_len over input
+        Add the mean of previous context_len embdding
+        """
+        b, t = idx.size()
+        device = idx.device
+        p = 0
+        context_embd = None
+        
+        if t < self.config.context_len:
+            return self.forward(idx, targets=targets)
+        
+        while p < t:
+            window = None
+            if context_embd is not None:
+                # print("Window:", p, p + self.config.context_len, t)
+                window = idx[:, p : p + self.config.context_len]
+                p = p + self.config.context_len
+                
+                tok_emb = self.transformer.wte(window)
+                pos = torch.arange(0, window.size()[1] + 1, dtype=torch.long, device=device)
+                pos_emb = self.transformer.wpe(pos)
+                tok_emb = torch.cat((context_embd, tok_emb), dim=1)
+                x = self.transformer.drop(tok_emb + pos_emb)
+                
+                # only proceed computing logits if this is the final window
+                if p < t:
+                    continue
+                
+                if targets is not None:
+                    # if we are given some desired targets also calculate the loss
+                    logits = self.lm_head(x)
+                    loss = F.cross_entropy(
+                        logits.view(-1, logits.size(-1)),
+                        targets.view(-1),
+                        ignore_index=-1,
+                    )
+                else:
+                    # inference-time mini-optimization: only forward the lm_head on the very last position
+                    logits = self.lm_head(
+                        x[:, [-1], :]
+                    )  # note: using list [-1] to preserve the time dim
+                    loss = None
+                    
+                return logits, loss
 
-    def forward(self, idx, targets=None, label_smoothing=None):
+            else:
+                # print("*Window:", p, p + self.config.context_len)
+                window = idx[:, p : p + self.config.context_len]
+                p = p + self.config.context_len 
+                context_embd = self.forward(window, embedding=True).mean(dim=1, keepdim=True)
+            
+            
+    def forward(self, idx, targets=None, label_smoothing=None, embedding=False):
         device = idx.device
         b, t = idx.size()
         assert (
             t <= self.config.context_len
         ), f"Cannot forward sequence of length {t}, block size is only {self.config.context_len}"
-        pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
-
+        # 0'th position is reserved for previous context embedding
+        pos = torch.arange(1, t+1, dtype=torch.long, device=device)  # shape (t)
         # forward the GPT model itself
         # token embeddings of shape (b, t, n_embd)
         tok_emb = self.transformer.wte(idx)
@@ -189,6 +246,10 @@ class GPT(nn.Module):
         for i, block in enumerate(self.transformer.h):
             x = block(x)
         x = self.transformer.ln_f(x)
+        
+        # return the embeddings if required
+        if embedding:
+            return x
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
@@ -272,8 +333,15 @@ class GPT(nn.Module):
         return idx
 
 
-# gpt = GPT(GPTConfig)
-# #gpt = torch.compile(gpt)
-# out, loss = gpt(torch.ones((2, 8), dtype=torch.long))
-# print(out.shape, loss)
-# del gpt, out, loss
+
+if __name__ == "__main__":
+    GPTConfig.context_len = 4
+    print("Input len", GPTConfig.context_len*5)
+    gpt = GPT(GPTConfig)
+    inp = torch.ones((2, GPTConfig.context_len*5), dtype=torch.long)
+    # out, loss = gpt(inp)
+    
+    print("Final out", gpt.forwardV2(inp)[0].shape)
+    
+    #print(out.shape, loss)
+    #del gpt, out, loss
