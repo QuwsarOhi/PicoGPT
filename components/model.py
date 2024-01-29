@@ -182,7 +182,7 @@ class GPT(nn.Module):
         p = 0
         context_embd = None
         
-        if t < self.config.context_len:
+        if t <= self.config.context_len:
             return self.forward(idx, targets=targets)
         
         while p < t:

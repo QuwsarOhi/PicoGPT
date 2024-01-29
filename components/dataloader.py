@@ -25,32 +25,38 @@ class TinyShakespere:
 
 
 class WikiData:
-    def __init__(self, tokenizer):
+    def __init__(self, tokenizer, context_len, ct_extend=1):
         self.data = load_dataset("wikipedia", "20220301.en")["train"]
         self.tokenizer = tokenizer
+        self.context_len = context_len
+        self.ct_extend = 1
         self.train_idx = int(0.95 * len(self.data))
 
     def get_batch(self, split, batch_size, device):
         # generate a small batch of data of inputs x and targets y
         N = len(self.data)
+        ct_len = self.context_len
+        if self.ct_extend != 1:
+            ct_len *= torch.randint(low=1, high=self.ct_extend+1, size=(1,),
+                                    device=device)
 
         while True:
             lo = 0 if split == "train" else self.train_idx
             hi = self.train_idx if split == "train" else N
             data = self.data[torch.randint(low=lo, high=hi, size=(1,))]["text"][0]
-            if len(data) - GPTConfig.context_len * 8 > 0:
+            if len(data) - ct_len > 0:
                 break
 
-        ix = torch.randint(len(data) - GPTConfig.context_len * 8, (batch_size,))
+        ix = torch.randint(len(data) - ct_len, (batch_size,))
 
         x = torch.tensor(
-            [self.tokenizer.encode(data[i : i + GPTConfig.context_len * 8]) for i in ix],
+            [self.tokenizer.encode(data[i : i + ct_len]) for i in ix],
             dtype=torch.long,
             device=device,
         )
         y = torch.tensor(
             [
-                self.tokenizer.encode(data[i + 1 : i + GPTConfig.context_len * 8 + 1])
+                self.tokenizer.encode(data[i + 1 : i + ct_len + 1])
                 for i in ix
             ],
             dtype=torch.long,
@@ -61,10 +67,12 @@ class WikiData:
 
 class TinyTextBook(WikiData):
     # Huggingface: https://huggingface.co/datasets/nampdn-ai/tiny-strange-textbooks
-    def __init__(self, tokenizer):
+    def __init__(self, tokenizer, context_len, ct_extend=1):
         # from huggingface_hub import login
         self.data = load_dataset("nampdn-ai/tiny-strange-textbooks")["train"]
         self.tokenizer = tokenizer
+        self.context_len = context_len
+        self.ct_extend = 1
         self.train_idx = len(self.data)
 
     def get_batch(self, split, batch_size, device):
@@ -73,6 +81,7 @@ class TinyTextBook(WikiData):
 
 class OpenOrca:
     # Huggingface: https://huggingface.co/datasets/Open-Orca/OpenOrca
+    # TODO: FIX WITH DYNAMIC CT_LEN
     def __init__(self, tokenizer):
         self.data = load_dataset("Open-Orca/OpenOrca")["train"]
         self.idx = -1

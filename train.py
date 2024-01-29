@@ -16,10 +16,9 @@ from argparse import ArgumentParser
 # Argument parsing
 parser = ArgumentParser()
 parser.add_argument("--init_weight", type=str, default=None)
-parser.add_argument("--fix_lr", type=bool, default=False)
+parser.add_argument("--fix_lr", type=bool, default=True)
 parser.add_argument("--dataset", type=str, default="tinytextbook")
 args, leftovers = parser.parse_known_args()
-
 
 @dataclass
 class TrainConfig:
@@ -148,21 +147,21 @@ def train_fn(
                     filehandler,
                 )
 
-        # # Inference test
-        # model.eval()
-        # x = torch.tensor(
-        #     tokenizer.encode("He is a"), dtype=torch.int, device=TrainConfig.device
-        # ).unsqueeze(0)
-        # print(
-        #     "Inference:",
-        #     "".join(
-        #         tokenizer.decode(
-        #             model.generate(x, max_new_tokens=500, temperature=0.5)
-        #             .detach()[0]
-        #             .tolist()
-        #         )
-        #     ),
-        # )
+        # Inference test
+        model.eval()
+        x = torch.tensor(
+            tokenizer.encode("He is a"), dtype=torch.int, device=TrainConfig.device
+        ).unsqueeze(0)
+        print(
+            "Inference:",
+            "".join(
+                tokenizer.decode(
+                    model.generate(x, max_new_tokens=500, temperature=0.5)
+                    .detach()[0]
+                    .tolist()
+                )
+            ),
+        )
 
         eps = list(range(1, len(losses["train"]) + 1))
         fig = plt.figure()
@@ -187,26 +186,21 @@ if __name__ == "__main__":
     print(f"Training on {args.dataset} dataset")
     
     if args.dataset.lower() == "wikidata":
-        data = WikiData(tokenizer)
+        data = WikiData(tokenizer, context_len=GPTConfig.context_len,
+                        ct_extend=10)
     elif args.dataset.lower() == "tinyshakespere":
         data = TinyShakespere(tokenizer)
     elif args.dataset.lower() == "tinytextbook":
-        data = TinyTextBook(tokenizer)
+        data = TinyTextBook(tokenizer, context_len=GPTConfig.context_len,
+                            ct_extend=10)
     elif args.dataset.lower() == "openorca":
-        data = OpenOrca(tokenizer)
+        data = OpenOrca(tokenizer, context_len=GPTConfig.context_len,
+                        ct_extend=10)
     else:
         raise ValueError(f"Invalid dataset name {args.dataset}")
     
 
     model = GPT(GPTConfig).to(TrainConfig.device)
-    optimizer = model.configure_optimizers(
-        TrainConfig.weight_decay,
-        TrainConfig.fixed_learning_rate
-        if TrainConfig.fixed_learning_rate
-        else TrainConfig.learning_rate,
-        (TrainConfig.beta1, TrainConfig.beta2),
-        TrainConfig.device,
-    )
 
     if args.init_weight is not None:
         init_path = os.path.join(".", "logs", args.init_weight, "log.pkl")
@@ -218,10 +212,20 @@ if __name__ == "__main__":
                 if name == "transformer.wpe.weight":
                     par.data[1:, :] = weights[name]
                 else:
-                    par = prev_train
+                    par = weights[name]
+                    par.requires_grad = True
             
             #model.load_state_dict(prev_train["best_weight"], strict=False)
         print(f"Loaded weight form {init_path}")    
+
+    optimizer = model.configure_optimizers(
+        TrainConfig.weight_decay,
+        TrainConfig.fixed_learning_rate
+        if TrainConfig.fixed_learning_rate
+        else TrainConfig.learning_rate,
+        (TrainConfig.beta1, TrainConfig.beta2),
+        TrainConfig.device,
+    )
 
     train_fn(
         model,
