@@ -2,12 +2,11 @@ import torch
 import torch.nn as nn
 from dataclasses import dataclass
 import os
-import io
 import pickle
 import math
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from components.model import GPT, GPTConfig
+from components.model import GPT, GPTConfig, CPU_Unpickler
 from components.tokenizer import Tokenizer
 from components.dataloader import TinyShakespere, WikiData, TinyTextBook, OpenOrca
 from argparse import ArgumentParser
@@ -19,6 +18,7 @@ parser.add_argument("--init_weight", type=str, default=None)
 parser.add_argument("--fix_lr", type=bool, default=True)
 parser.add_argument("--dataset", type=str, default="tinytextbook")
 args, leftovers = parser.parse_known_args()
+
 
 @dataclass
 class TrainConfig:
@@ -49,15 +49,6 @@ def get_lr(it):
     assert 0 <= decay_ratio <= 1
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))  # coeff ranges 0..1
     return TrainConfig.min_lr + coeff * (TrainConfig.learning_rate - TrainConfig.min_lr)
-
-
-# https://github.com/pytorch/pytorch/issues/16797#issuecomment-633423219
-class CPU_Unpickler(pickle.Unpickler):
-    def find_class(self, module, name):
-        if module == "torch.storage" and name == "_load_from_bytes":
-            return lambda b: torch.load(io.BytesIO(b), map_location="cpu")
-        else:
-            return super().find_class(module, name)
 
 
 def train_fn(
@@ -184,21 +175,17 @@ if __name__ == "__main__":
     # Loading dataset
     tokenizer = Tokenizer()
     print(f"Training on {args.dataset} dataset")
-    
+
     if args.dataset.lower() == "wikidata":
-        data = WikiData(tokenizer, context_len=GPTConfig.context_len,
-                        ct_extend=10)
+        data = WikiData(tokenizer, context_len=GPTConfig.context_len, ct_extend=10)
     elif args.dataset.lower() == "tinyshakespere":
         data = TinyShakespere(tokenizer)
     elif args.dataset.lower() == "tinytextbook":
-        data = TinyTextBook(tokenizer, context_len=GPTConfig.context_len,
-                            ct_extend=10)
+        data = TinyTextBook(tokenizer, context_len=GPTConfig.context_len, ct_extend=10)
     elif args.dataset.lower() == "openorca":
-        data = OpenOrca(tokenizer, context_len=GPTConfig.context_len,
-                        ct_extend=10)
+        data = OpenOrca(tokenizer, context_len=GPTConfig.context_len, ct_extend=10)
     else:
         raise ValueError(f"Invalid dataset name {args.dataset}")
-    
 
     model = GPT(GPTConfig).to(TrainConfig.device)
 
@@ -207,16 +194,17 @@ if __name__ == "__main__":
         with open(init_path, "rb") as filehandler:
             prev_train = CPU_Unpickler(filehandler).load()
             weights = prev_train["best_weight"]
-            
+
+            # Added one extra previous context token on post-training (resides at position 0)
+            # the default positional encodings goes to the rest of the positional encodings
             for name, par in model.named_parameters():
                 if name == "transformer.wpe.weight":
                     par.data[1:, :] = weights[name]
                 else:
                     par = weights[name]
                     par.requires_grad = True
-            
-            #model.load_state_dict(prev_train["best_weight"], strict=False)
-        print(f"Loaded weight form {init_path}")    
+
+        print(f"Loaded weight form {init_path}")
 
     optimizer = model.configure_optimizers(
         TrainConfig.weight_decay,

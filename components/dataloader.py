@@ -37,8 +37,9 @@ class WikiData:
         N = len(self.data)
         ct_len = self.context_len
         if self.ct_extend != 1:
-            ct_len *= torch.randint(low=1, high=self.ct_extend+1, size=(1,),
-                                    device=device)
+            ct_len *= torch.randint(
+                low=1, high=self.ct_extend + 1, size=(1,), device=device
+            )
 
         while True:
             lo = 0 if split == "train" else self.train_idx
@@ -55,10 +56,7 @@ class WikiData:
             device=device,
         )
         y = torch.tensor(
-            [
-                self.tokenizer.encode(data[i + 1 : i + ct_len + 1])
-                for i in ix
-            ],
+            [self.tokenizer.encode(data[i + 1 : i + ct_len + 1]) for i in ix],
             dtype=torch.long,
             device=device,
         )
@@ -72,7 +70,7 @@ class TinyTextBook(WikiData):
         self.data = load_dataset("nampdn-ai/tiny-strange-textbooks")["train"]
         self.tokenizer = tokenizer
         self.context_len = context_len
-        self.ct_extend = 1
+        self.ct_extend = ct_extend
         self.train_idx = len(self.data)
 
     def get_batch(self, split, batch_size, device):

@@ -4,6 +4,8 @@ import torch.nn.functional as F
 import inspect
 import copy
 from dataclasses import dataclass
+import pickle
+import io
 
 
 @dataclass
@@ -127,11 +129,16 @@ class GPT(nn.Module):
 
         self.transformer = nn.ModuleDict(
             dict(
+                # token id to embedding
                 wte=nn.Embedding(self.config.vocab_size, self.config.n_embd),
+                # position id to embedding
                 # preserving one extra context position for previous context embedding
                 wpe=nn.Embedding(self.config.context_len + 1, self.config.n_embd),
                 drop=nn.Dropout(self.config.dropout),
-                h=nn.ModuleList([Block(self.config) for _ in range(self.config.n_layer)]),
+                # transformer blocks
+                h=nn.ModuleList(
+                    [Block(self.config) for _ in range(self.config.n_layer)]
+                ),
                 ln_f=nn.LayerNorm(self.config.n_embd),
             )
         )
@@ -164,78 +171,107 @@ class GPT(nn.Module):
         return n_params
 
     def _init_weights(self, module):
+        """
+        Basic weight initialization that works on Linear layers and embeddings.
+        """
         if isinstance(module, nn.Linear):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
-                 
+
     def forwardV2(self, idx, targets=None):
         """
-        Encodes context as long as it is big
-        Slide a window of size context_len over input
-        Add the mean of previous context_len embdding
+        Processes bigger sentences, bigger than context_len.
+        It slides a window of size context_len over the input prefix and generates
+        context length embedding, CT.
+        CT is the mean of previous context_len embdding.
+        For the preceeding context_len window calculation, the embedding is calculated as:
+        [CT, t_i, t_i+1, .... t_context_len]
         """
         b, t = idx.size()
         device = idx.device
         p = 0
+        # Context embedding from previous window (b, 1, n_embd)
         context_embd = None
+        # Context embedding of current window (b, [t or t+1], n_embd)
+        window = None
         
-        if t <= self.config.context_len:
-            return self.forward(idx, targets=targets)
-        
+        # Go for context rollover
         while p < t:
-            window = None
             if context_embd is not None:
                 # print("Window:", p, p + self.config.context_len, t)
+                # Current context window
                 window = idx[:, p : p + self.config.context_len]
                 p = p + self.config.context_len
-                
+                # generate token embedding of current token window
                 tok_emb = self.transformer.wte(window)
-                pos = torch.arange(0, window.size()[1] + 1, dtype=torch.long, device=device)
+                # 0'th position embedding is for previous context embedding
+                # the rest are for the current token position embedding
+                pos = torch.arange(
+                    0, window.size()[1] + 1, dtype=torch.long, device=device
+                )
                 pos_emb = self.transformer.wpe(pos)
+                # Contatinating the previous context embedding at front
                 tok_emb = torch.cat((context_embd, tok_emb), dim=1)
-                x = self.transformer.drop(tok_emb + pos_emb)
-                
-                # only proceed computing logits if this is the final window
-                if p < t:
-                    continue
-                
-                if targets is not None:
-                    # if we are given some desired targets also calculate the loss
-                    logits = self.lm_head(x)
-                    logits = logits[:, 1:, :]
-                    targets = targets[:, -logits.size()[1]:]
-                    loss = F.cross_entropy(
-                        logits.reshape(-1, logits.size(-1)),
-                        targets.reshape(-1),
-                        ignore_index=-1,
-                    )
-                else:
-                    # inference-time mini-optimization: only forward the lm_head on the very last position
-                    logits = self.lm_head(
-                        x[:, [-1], :]
-                    )  # note: using list [-1] to preserve the time dim
-                    loss = None
-                    
-                return logits, loss
+                window = self.transformer.drop(tok_emb + pos_emb)
+                # propagating through transformers
+                for i, block in enumerate(self.transformer.h):
+                    window = block(window)
+                window = self.transformer.ln_f(window)
+                context_embd = window.mean(dim=1, keepdim=True)
 
             else:
-                # print("*Window:", p, p + self.config.context_len)
-                window = idx[:, p : p + self.config.context_len]
-                p = p + self.config.context_len 
-                context_embd = self.forward(window, embedding=True).mean(dim=1, keepdim=True)
-            
-            
-    def forward(self, idx, targets=None, label_smoothing=None, embedding=False):
+                # Starting of context embedding
+                # If the tokens does not fill context length, take the remainder prefix
+                # as the starting context
+                e = p + self.config.context_len
+                if t % self.config.context_len != 0:
+                    e = t % self.config.context_len
+                # print("*Window:", p, e)
+                window = idx[:, p:e]
+                p = e
+                # Only calculating the embedding
+                window = self.forwardV1(window, embedding_only=True)
+                context_embd = window.mean(dim=1, keepdim=True)
+
+        # Final calculation
+        if targets is not None:
+            # if we are given some desired targets also calculate the loss
+            logits = self.lm_head(window)
+            # ditching the previous context embedding position
+            if logits.size()[1] == self.config.context_len:
+                logits = logits[:, 1:, :]
+            # the data generator gives similar length prediction input w.r.t. the input
+            # ignoring it as the model only focus on last context window
+            targets = targets[:, -logits.size()[1] :]
+            # CE loss
+            loss = F.cross_entropy(
+                logits.reshape(-1, logits.size(-1)),
+                targets.reshape(-1),
+                ignore_index=-1,
+            )
+        else:
+            # inference-time mini-optimization: only forward the lm_head on the very last position
+            logits = self.lm_head(
+                window[:, [-1], :]
+            )  # note: using list [-1] to preserve the time dim
+            loss = None
+
+        return logits, loss
+
+    def forwardV1(self, idx, targets=None, embedding_only=False):
+        """
+        The traditional forward processing.
+        """
         device = idx.device
         b, t = idx.size()
         assert (
             t <= self.config.context_len
         ), f"Cannot forward sequence of length {t}, block size is only {self.config.context_len}"
         # 0'th position is reserved for previous context embedding
-        pos = torch.arange(1, t+1, dtype=torch.long, device=device)  # shape (t)
+        pos = torch.arange(1, t + 1, dtype=torch.long, device=device)  # shape (t)
         # forward the GPT model itself
         # token embeddings of shape (b, t, n_embd)
         tok_emb = self.transformer.wte(idx)
@@ -248,18 +284,16 @@ class GPT(nn.Module):
         for i, block in enumerate(self.transformer.h):
             x = block(x)
         x = self.transformer.ln_f(x)
-        
+
         # return the embeddings if required
-        if embedding:
+        if embedding_only:
             return x
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
             loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)),
-                targets.view(-1),
-                ignore_index=-1
+                logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
             )
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
@@ -269,6 +303,9 @@ class GPT(nn.Module):
             loss = None
 
         return logits, loss
+    
+    def forward(self, *args, **kwargs):
+        return self.forwardV2(*args, **kwargs)
 
     def configure_optimizers(self, weight_decay, learning_rate, betas, device_type):
         # start with all of the candidate parameters
@@ -334,15 +371,28 @@ class GPT(nn.Module):
         return idx
 
 
+# Sometimes pickle does not behave right when used with pytorch weight (when transferred to CPU/GPU)
+# Adding a bugfix for it https://github.com/pytorch/pytorch/issues/16797#issuecomment-633423219
+class CPU_Unpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        if module == "torch.storage" and name == "_load_from_bytes":
+            return lambda b: torch.load(io.BytesIO(b), map_location="cpu")
+        else:
+            return super().find_class(module, name)
+
 
 if __name__ == "__main__":
     GPTConfig.context_len = 4
-    print("Input len", GPTConfig.context_len*5)
+    ct = GPTConfig.context_len * 3 + 2
+    print("Input len", ct)
     gpt = GPT(GPTConfig)
-    inp = torch.ones((2, GPTConfig.context_len*5), dtype=torch.long)
+    inp = torch.ones((2, ct), dtype=torch.long)
     # out, loss = gpt(inp)
-    
+
     print("Final out", gpt.forwardV2(inp)[0].shape)
+    #print("Final out", gpt.forwardV1(inp)[0].shape)
     
-    #print(out.shape, loss)
-    #del gpt, out, loss
+    #assert (gpt.forward(inp)[0] == gpt.forwardV2(inp)[0]).all()
+
+    # print(out.shape, loss)
+    # del gpt, out, loss

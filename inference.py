@@ -3,9 +3,10 @@ import pickle
 import io
 import os
 import torch.nn.functional as F
-from components.model import GPT, GPTConfig
+from components.model import GPT, GPTConfig, CPU_Unpickler
 from components.tokenizer import Tokenizer
 from argparse import ArgumentParser
+
 
 # Argument parsing
 parser = ArgumentParser()
@@ -15,15 +16,6 @@ args, leftovers = parser.parse_known_args()
 
 model = GPT(GPTConfig)
 tokenizer = Tokenizer()
-
-
-# https://github.com/pytorch/pytorch/issues/16797#issuecomment-633423219
-class CPU_Unpickler(pickle.Unpickler):
-    def find_class(self, module, name):
-        if module == "torch.storage" and name == "_load_from_bytes":
-            return lambda b: torch.load(io.BytesIO(b), map_location="cpu")
-        else:
-            return super().find_class(module, name)
 
 
 savepath = os.path.join(".", "logs", args.weight, "log.pkl")
