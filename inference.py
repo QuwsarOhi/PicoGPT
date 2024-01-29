@@ -32,14 +32,8 @@ def generate(idx, max_new_tokens, temperature=1.0, top_k=None):
     Most likely you'll want to make sure to be in model.eval() mode of operation for this.
     """
     for _ in range(max_new_tokens):
-        # if the sequence context is growing too long we must crop it at context_len
-        idx_cond = (
-            idx
-            if idx.size(1) <= GPTConfig.context_len
-            else idx[:, -GPTConfig.context_len :]
-        )
         # forward the model to get the logits for the index in the sequence
-        logits, _ = model(idx_cond)
+        logits, _ = model(idx)
         # pluck the logits at the final step and scale by desired temperature
         logits = logits[:, -1, :] / temperature
 

@@ -1,6 +1,6 @@
 import torch
 import os
-from .model import GPTConfig
+from model import GPTConfig
 from datasets import load_dataset
 
 
@@ -82,10 +82,10 @@ class OpenOrca:
     # TODO: FIX WITH DYNAMIC CT_LEN
     def __init__(self, tokenizer):
         self.data = load_dataset("Open-Orca/OpenOrca")["train"]
-        self.idx = -1
+        self.idx = 0
         self.pos = 0
-        self.len = len(self.data["system_prompt"])
         self.text = ""
+        self.len = len(self.data["id"])
         self.tokenizer = tokenizer
         self.step()
 
@@ -107,6 +107,7 @@ class OpenOrca:
         <A>ANSWER</A>
         """
         data = self.data[idx]
+        # Add system prompt and question
         self.text = (
             [76]
             + self.tokenizer.encode(data["system_prompt"])
@@ -116,40 +117,26 @@ class OpenOrca:
             + self.tokenizer.encode(data["question"])
             + [79]
             + self.tokenizer.encode("\n")
-            + [80]
-            + self.tokenizer.encode(data["response"])
-            + [81]
         )
-
+        self.pos = len(self.text)
+        # Add the response
+        self.text += [80] + self.tokenizer.encode(data["response"]) + [81]
+        self.pos = min(self.pos + GPTConfig.context_len, len(self.text))
+        
     def step(self):
         self.idx = (self.idx + 1) % self.len
-        self.pos = 0
         self.process(self.idx)
 
     def get_batch(self, split, batch_size, device):
         x, y = [], []
         for i in range(batch_size):
-            if self.pos >= len(self.text):
+            if self.pos + 1 >= len(self.text):
                 self.step()
 
-            x.append(self.text[self.pos : self.pos + GPTConfig.context_len])
-            y.append(self.text[self.pos + 1 : self.pos + GPTConfig.context_len + 1])
-
-            # Padding
-            pad = False
-
-            while len(x[-1]) < GPTConfig.context_len:
-                x[-1].append(75)
-                pad = True
-
-            while len(y[-1]) < GPTConfig.context_len:
-                y[-1].append(75)
-                pad = True
-
+            x.append(self.text[0 : self.pos])
+            y.append(self.text[1 : self.pos + 1])
             self.pos += 1
-            if pad:
-                self.step()
-
+            
         return (
             torch.tensor(x, dtype=torch.long, device=device),
             torch.tensor(y, dtype=torch.long, device=device),
@@ -159,16 +146,18 @@ class OpenOrca:
 if __name__ == "__main__":
     from tokenizer import Tokenizer
 
+    GPTConfig.context_len = 128
     tokenizer = Tokenizer()
     data = OpenOrca(tokenizer)
 
-    t, s = data.get_batch("train", 2, "cpu")
-    # print(t)
-
-    for x, y in zip(t, s):
-        x, y = x.tolist(), y.tolist()
-        print("".join(tokenizer.decode(x)), "=", "".join(tokenizer.decode(y)))
-        print("-+" * 20)
+    for i in range(10):
+        t, s = data.get_batch("train", 1, "cpu")
+        for x, y in zip(t, s):
+            x, y = x.tolist(), y.tolist()
+            print("".join(tokenizer.decode(x)))
+            print("==")
+            print("".join(tokenizer.decode(y)))
+            print("-+" * 20)
 
     # print(data.get_batch("train", 8, 'cpu'))
     # print(data.get_batch("test", 8, 'cpu'))
