@@ -196,32 +196,24 @@ class GPT(nn.Module):
         context_embd = None
         # Context embedding of current window (b, [t or t+1], n_embd)
         window = None
+        pad = False
 
         # Go for context rollover
         while p < t:
-            if context_embd is not None:
-                # print("Window:", p, p + self.config.context_len, t)
-                # Current context window
-                window = idx[:, p : p + self.config.context_len]
-                p = p + self.config.context_len
-                # generate embeddings
-                window = self.forwardV1(
-                    window, prev_context=context_embd, embedding_only=True
-                )
-                context_embd = window.mean(dim=1, keepdim=True)
-            else:
-                # Starting of context embedding
-                # If the tokens does not fill context length, take the remainder prefix
-                # as the starting context
-                e = p + self.config.context_len
-                if t % self.config.context_len != 0:
-                    e = t % self.config.context_len
-                # print("*Window:", p, e)
-                window = idx[:, p:e]
-                p = e
-                # Only calculating the embedding
-                window = self.forwardV1(window, embedding_only=True)
-                context_embd = window.mean(dim=1, keepdim=True)
+            st = p  # start
+            ed = p + self.config.context_len  # end
+            # If the tokens does not fill context length, take the remainder prefix
+            # as the starting context
+            if t % self.config.context_len != 0 and not pad:
+                ed = t % self.config.context_len
+                pad = True
+            window = idx[:, st:ed]
+            p = ed
+            # Only calculating the embedding
+            window = self.forwardV1(
+                window, prev_context=context_embd, embedding_only=True
+            )
+            context_embd = window.mean(dim=1, keepdim=True)
 
         # Final calculation
         if targets is not None:

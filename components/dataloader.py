@@ -1,8 +1,10 @@
 import torch
 import os
-from model import GPTConfig
+from .model import GPTConfig
+import random
 from datasets import load_dataset
 
+MAX_LEN = 2**12 # 2**13 -> 8192
 
 class TinyShakespere:
     def __init__(self, tokenizer):
@@ -37,9 +39,10 @@ class WikiData:
         N = len(self.data)
         ct_len = self.context_len
         if self.ct_extend != 1:
-            ct_len *= torch.randint(
-                low=1, high=self.ct_extend + 1, size=(1,), device=device
-            )
+            #ct_len *= torch.randint(
+            #    low=1, high=self.ct_extend + 1, size=(1,), device=device
+            #)
+            ct_len = int((ct_len * self.ct_extend) * random.uniform(0.1, 1.0))
 
         while True:
             lo = 0 if split == "train" else self.train_idx
@@ -78,18 +81,29 @@ class TinyTextBook(WikiData):
 
 
 class OpenOrca:
+    """
+    This data generator generates data in-order:
+        Text: <S>You are good AI</S><Q>Who are you?</Q><A>I am a good AI</A>
+        Context len: 8
+        
+        Outputs:
+            1: Inp: <S>You are good AI</S><Q>Who are you?</Q> |
+               Out: <S>You are good AI</S><Q>Who are you?</Q> |
+            2: Inp: <S>You are good AI</S><Q>Who are you?</Q> | <A>I
+               Out: 
+            3: <S>You are good AI</S><Q>Who are you?</Q> | <A>I 
+            4: <S>You are good AI</S><Q>Who are you?</Q> | <A>I a
+            4: <S>You are good AI</S><Q>Who are you?</Q> | <A>I am
+        
+    """
     # Huggingface: https://huggingface.co/datasets/Open-Orca/OpenOrca
-    # TODO: FIX WITH DYNAMIC CT_LEN
-    def __init__(self, tokenizer):
+    def __init__(self, tokenizer, context_len):
         self.data = load_dataset("Open-Orca/OpenOrca")["train"]
-        self.idx = 0
-        self.pos = 0
-        self.text = ""
+        self.context_len = context_len
         self.len = len(self.data["id"])
         self.tokenizer = tokenizer
-        self.step()
 
-    def process(self, idx):
+    def process(self):
         """
         Tokens:
         <?>  [0] : Unknown character
@@ -100,43 +114,46 @@ class OpenOrca:
         </Q> [79]: Question end
         <A>  [80]: Answer start
         </A> [81]: Answer end
-
-        Processes the strings as follows:
-        <S>SYSTEM_PROMPT</S>
+        Processes the output as follows:
+        <S>SYSTEM_PROMPT</S> [DO NOT HAVE IT FOR NOW]
         <Q>QUESTION</Q>
         <A>ANSWER</A>
         """
+        # Get random chat data
+        idx = random.randint(0, self.len-1)
         data = self.data[idx]
         # Add system prompt and question
-        self.text = (
-            [76]
-            + self.tokenizer.encode(data["system_prompt"])
-            + [77]
-            + self.tokenizer.encode("\n")
-            + [78]
+        text = (
+            #[76]
+            #+ self.tokenizer.encode(data["system_prompt"])
+            #+ [77]
+            #+ self.tokenizer.encode("\n")
+            [78]
             + self.tokenizer.encode(data["question"])
             + [79]
             + self.tokenizer.encode("\n")
         )
-        self.pos = len(self.text)
+        query_len = len(text)
         # Add the response
-        self.text += [80] + self.tokenizer.encode(data["response"]) + [81]
-        self.pos = min(self.pos + GPTConfig.context_len, len(self.text))
+        text += [80] + self.tokenizer.encode(data["response"]) + [81]
+        st = min(query_len + self.context_len, len(text))
+        ed = len(text)
         
-    def step(self):
-        self.idx = (self.idx + 1) % self.len
-        self.process(self.idx)
+        # NOT GO BEYOND MAX_LEN
+        if st >= MAX_LEN:
+            return self.process()
+        if st >= ed-2:
+            return text, st
+        
+        return text, random.randint(st, min(ed-2, MAX_LEN))
 
     def get_batch(self, split, batch_size, device):
         x, y = [], []
         for i in range(batch_size):
-            if self.pos + 1 >= len(self.text):
-                self.step()
+            text, ed = self.process()
+            x.append(text[0 : ed])
+            y.append(text[1 : ed + 1])
 
-            x.append(self.text[0 : self.pos])
-            y.append(self.text[1 : self.pos + 1])
-            self.pos += 1
-            
         return (
             torch.tensor(x, dtype=torch.long, device=device),
             torch.tensor(y, dtype=torch.long, device=device),
@@ -146,12 +163,12 @@ class OpenOrca:
 if __name__ == "__main__":
     from tokenizer import Tokenizer
 
-    GPTConfig.context_len = 128
     tokenizer = Tokenizer()
-    data = OpenOrca(tokenizer)
+    data = OpenOrca(tokenizer, 128)
 
-    for i in range(10):
+    for i in range(2):
         t, s = data.get_batch("train", 1, "cpu")
+        print(t.shape, s.shape)
         for x, y in zip(t, s):
             x, y = x.tolist(), y.tolist()
             print("".join(tokenizer.decode(x)))
