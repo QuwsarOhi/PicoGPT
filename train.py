@@ -16,7 +16,7 @@ from argparse import ArgumentParser
 # Argument parsing
 parser = ArgumentParser()
 parser.add_argument("--init_weight", type=str, default=None)
-parser.add_argument("--fix_lr", type=bool, default=True)
+parser.add_argument("--fix_lr", type=bool, default=False)
 parser.add_argument("--dataset", type=str, default="tinytextbook")
 args, leftovers = parser.parse_known_args()
 
@@ -104,9 +104,6 @@ def train_fn(
                     _, batch_loss = model.forwardV2(
                         x,
                         y,
-                        label_smoothing=TrainConfig.label_smoothing
-                        if is_training
-                        else 0.0,
                     )
 
                     if is_training:
@@ -151,21 +148,21 @@ def train_fn(
                     filehandler,
                 )
 
-        # Inference test
-        model.eval()
-        x = torch.tensor(
-            tokenizer.encode("He is a"), dtype=torch.int, device=TrainConfig.device
-        ).unsqueeze(0)
-        print(
-            "Inference:",
-            "".join(
-                tokenizer.decode(
-                    model.generate(x, max_new_tokens=500, temperature=0.5)
-                    .detach()[0]
-                    .tolist()
-                )
-            ),
-        )
+        # # Inference test
+        # model.eval()
+        # x = torch.tensor(
+        #     tokenizer.encode("He is a"), dtype=torch.int, device=TrainConfig.device
+        # ).unsqueeze(0)
+        # print(
+        #     "Inference:",
+        #     "".join(
+        #         tokenizer.decode(
+        #             model.generate(x, max_new_tokens=500, temperature=0.5)
+        #             .detach()[0]
+        #             .tolist()
+        #         )
+        #     ),
+        # )
 
         eps = list(range(1, len(losses["train"]) + 1))
         fig = plt.figure()
@@ -215,8 +212,16 @@ if __name__ == "__main__":
         init_path = os.path.join(".", "logs", args.init_weight, "log.pkl")
         with open(init_path, "rb") as filehandler:
             prev_train = CPU_Unpickler(filehandler).load()
-            model.load_state_dict(prev_train["best_weight"], strict=True)
-        print(f"Loaded weight form {init_path}")
+            weights = prev_train["best_weight"]
+            
+            for name, par in model.named_parameters():
+                if name == "transformer.wpe.weight":
+                    par.data[1:, :] = weights[name]
+                else:
+                    par = prev_train
+            
+            #model.load_state_dict(prev_train["best_weight"], strict=False)
+        print(f"Loaded weight form {init_path}")    
 
     train_fn(
         model,
