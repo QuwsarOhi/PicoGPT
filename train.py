@@ -177,13 +177,13 @@ if __name__ == "__main__":
     print(f"Training on {args.dataset} dataset")
 
     if args.dataset.lower() == "wikidata":
-        data = WikiData(tokenizer, context_len=GPTConfig.context_len, ct_extend=10)
+        data = WikiData(tokenizer, context_len=GPTConfig.context_len, ct_extend=4)
     elif args.dataset.lower() == "tinyshakespere":
         data = TinyShakespere(tokenizer)
     elif args.dataset.lower() == "tinytextbook":
-        data = TinyTextBook(tokenizer, context_len=GPTConfig.context_len, ct_extend=10)
+        data = TinyTextBook(tokenizer, context_len=GPTConfig.context_len, ct_extend=4)
     elif args.dataset.lower() == "openorca":
-        data = OpenOrca(tokenizer, context_len=GPTConfig.context_len, ct_extend=10)
+        data = OpenOrca(tokenizer, context_len=GPTConfig.context_len, ct_extend=4)
     else:
         raise ValueError(f"Invalid dataset name {args.dataset}")
 

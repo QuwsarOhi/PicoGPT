@@ -191,13 +191,12 @@ class GPT(nn.Module):
         [CT, t_i, t_i+1, .... t_context_len]
         """
         b, t = idx.size()
-        device = idx.device
         p = 0
         # Context embedding from previous window (b, 1, n_embd)
         context_embd = None
         # Context embedding of current window (b, [t or t+1], n_embd)
         window = None
-        
+
         # Go for context rollover
         while p < t:
             if context_embd is not None:
@@ -205,23 +204,11 @@ class GPT(nn.Module):
                 # Current context window
                 window = idx[:, p : p + self.config.context_len]
                 p = p + self.config.context_len
-                # generate token embedding of current token window
-                tok_emb = self.transformer.wte(window)
-                # 0'th position embedding is for previous context embedding
-                # the rest are for the current token position embedding
-                pos = torch.arange(
-                    0, window.size()[1] + 1, dtype=torch.long, device=device
+                # generate embeddings
+                window = self.forwardV1(
+                    window, prev_context=context_embd, embedding_only=True
                 )
-                pos_emb = self.transformer.wpe(pos)
-                # Contatinating the previous context embedding at front
-                tok_emb = torch.cat((context_embd, tok_emb), dim=1)
-                window = self.transformer.drop(tok_emb + pos_emb)
-                # propagating through transformers
-                for i, block in enumerate(self.transformer.h):
-                    window = block(window)
-                window = self.transformer.ln_f(window)
                 context_embd = window.mean(dim=1, keepdim=True)
-
             else:
                 # Starting of context embedding
                 # If the tokens does not fill context length, take the remainder prefix
@@ -240,12 +227,12 @@ class GPT(nn.Module):
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(window)
-            # ditching the previous context embedding position
-            if logits.size()[1] == self.config.context_len:
-                logits = logits[:, 1:, :]
+            t = min(logits.size()[1], targets.size()[1])
+            # ditching the previous context embedding position when input length is equal to context length
+            logits = logits[:, -t:]
             # the data generator gives similar length prediction input w.r.t. the input
             # ignoring it as the model only focus on last context window
-            targets = targets[:, -logits.size()[1] :]
+            targets = targets[:, -t:]
             # CE loss
             loss = F.cross_entropy(
                 logits.reshape(-1, logits.size(-1)),
@@ -261,9 +248,9 @@ class GPT(nn.Module):
 
         return logits, loss
 
-    def forwardV1(self, idx, targets=None, embedding_only=False):
+    def forwardV1(self, idx, targets=None, prev_context=None, embedding_only=False):
         """
-        The traditional forward processing.
+        The traditional forward processing when prev_context is None.
         """
         device = idx.device
         b, t = idx.size()
@@ -271,10 +258,14 @@ class GPT(nn.Module):
             t <= self.config.context_len
         ), f"Cannot forward sequence of length {t}, block size is only {self.config.context_len}"
         # 0'th position is reserved for previous context embedding
-        pos = torch.arange(1, t + 1, dtype=torch.long, device=device)  # shape (t)
+        pos = torch.arange(0, t + 1, dtype=torch.long, device=device)  # shape (t)
         # forward the GPT model itself
         # token embeddings of shape (b, t, n_embd)
+        # if we don't have previous context then add zero embedding
         tok_emb = self.transformer.wte(idx)
+        if prev_context is None:
+            prev_context = torch.zeros(b, 1, self.config.n_embd)
+        tok_emb = torch.cat((prev_context, tok_emb), dim=1)
         # position embeddings of shape (t, n_embd)
         pos_emb = self.transformer.wpe(pos)
         # add position embeddings
@@ -303,7 +294,7 @@ class GPT(nn.Module):
             loss = None
 
         return logits, loss
-    
+
     def forward(self, *args, **kwargs):
         return self.forwardV2(*args, **kwargs)
 
@@ -390,9 +381,9 @@ if __name__ == "__main__":
     # out, loss = gpt(inp)
 
     print("Final out", gpt.forwardV2(inp)[0].shape)
-    #print("Final out", gpt.forwardV1(inp)[0].shape)
-    
-    #assert (gpt.forward(inp)[0] == gpt.forwardV2(inp)[0]).all()
+    # print("Final out", gpt.forwardV1(inp)[0].shape)
+
+    # assert (gpt.forward(inp)[0] == gpt.forwardV2(inp)[0]).all()
 
     # print(out.shape, loss)
     # del gpt, out, loss
