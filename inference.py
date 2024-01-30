@@ -8,7 +8,7 @@ from argparse import ArgumentParser
 
 # Argument parsing
 parser = ArgumentParser()
-parser.add_argument("--weight", type=str, default="openorca")
+parser.add_argument("--weight", type=str, default="wikidata_ct1280")
 parser.add_argument("--chat", type=bool, default=False)
 args, leftovers = parser.parse_known_args()
 
@@ -70,4 +70,4 @@ while True:
         )
 
     x = torch.tensor(x, dtype=torch.long).unsqueeze(0)
-    generate(x, max_new_tokens=128, temperature=0.5, top_k=10)
+    generate(x, max_new_tokens=256, temperature=0.5)

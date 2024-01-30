@@ -32,7 +32,7 @@ class TrainConfig:
     beta1 = 0.9
     beta2 = 0.95
     label_smoothing = 0.0
-    fixed_learning_rate = 1e-5 if args.fix_lr else None  # 3e-5
+    fixed_learning_rate = 3e-5 if args.fix_lr else None  # 3e-5
 
 
 def get_lr(it):
@@ -177,7 +177,7 @@ if __name__ == "__main__":
     print(f"Training on {args.dataset} dataset")
 
     if args.dataset.lower() == "wikidata":
-        data = WikiData(tokenizer, context_len=GPTConfig.context_len, ct_extend=4)
+        data = WikiData(tokenizer, context_len=GPTConfig.context_len * 10)
     elif args.dataset.lower() == "tinyshakespere":
         data = TinyShakespere(tokenizer)
     elif args.dataset.lower() == "tinytextbook":
@@ -193,22 +193,7 @@ if __name__ == "__main__":
         init_path = os.path.join(".", "logs", args.init_weight, "log.pkl")
         with open(init_path, "rb") as filehandler:
             prev_train = CPU_Unpickler(filehandler).load()
-            weights = prev_train["best_weight"]
-
-            # Added one extra previous context token on post-training (resides at position 0)
-            # the default positional encodings goes to the rest of the positional encodings
-            for name, par in model.named_parameters():
-                if (name == "transformer.wpe.weight") and (
-                    par.data.shape != weights[name].shape
-                ):
-                    par.data[1:, :] = weights[name]
-                else:
-                    par = weights[name]
-                    # par.requires_grad = False
-            # model.transformer.wpe.requires_grad = True
-            # model.lm_head.requires_grad = True
-
-        print(f"Loaded weight form {init_path}")
+            model.load_state_dict(prev_train["best_weight"], strict=False)
 
     optimizer = model.configure_optimizers(
         TrainConfig.weight_decay,

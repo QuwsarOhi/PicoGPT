@@ -45,7 +45,6 @@ class WikiData:
                 break
 
         ix = torch.randint(len(data) - ct_len, (batch_size,))
-
         x = torch.tensor(
             [self.tokenizer.encode(data[i : i + ct_len]) for i in ix],
             dtype=torch.long,
@@ -86,7 +85,6 @@ class OpenOrca:
             3: <S>You are good AI</S><Q>Who are you?</Q> | <A>I
             4: <S>You are good AI</S><Q>Who are you?</Q> | <A>I a
             4: <S>You are good AI</S><Q>Who are you?</Q> | <A>I am
-
     """
 
     # Huggingface: https://huggingface.co/datasets/Open-Orca/OpenOrca
@@ -133,12 +131,12 @@ class OpenOrca:
     def get_batch(self, split, batch_size, device):
         x, y = [], []
         ct_len = self.context_len
-        
+
         while True:
             text = self.process()
             if len(text) > ct_len:
                 break
-            
+
         ix = torch.randint(len(text) - ct_len, (batch_size,))
         x = torch.tensor(
             [text[i : i + ct_len] for i in ix],
@@ -157,7 +155,7 @@ if __name__ == "__main__":
     from tokenizer import Tokenizer
 
     tokenizer = Tokenizer()
-    data = OpenOrca(tokenizer, 128*10)
+    data = OpenOrca(tokenizer, 128 * 10)
 
     for i in range(2):
         t, s = data.get_batch("train", 1, "cpu")

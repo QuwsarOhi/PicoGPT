@@ -10,7 +10,7 @@ import io
 
 @dataclass
 class GPTConfig:
-    # Model parameters: 6.35M [Comparable with MobileNets]
+    # Model parameters: 6.34M [Comparable with MobileNets]
     # Improves large-sequence word generation
     context_len: int = 128
     # Using charachter-level tokenization
