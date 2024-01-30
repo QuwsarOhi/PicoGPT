@@ -14,15 +14,15 @@ from argparse import ArgumentParser
 
 # Argument parsing
 parser = ArgumentParser()
-parser.add_argument("--init_weight", type=str, default="tinytextbook")
+parser.add_argument("--init_weight", type=str, default=None)
 parser.add_argument("--fix_lr", type=bool, default=True)
-parser.add_argument("--dataset", type=str, default="openorca")
+parser.add_argument("--dataset", type=str, default="tinytextbook")
 args, leftovers = parser.parse_known_args()
 
 
 @dataclass
 class TrainConfig:
-    batch_size: int = 1 # 8
+    batch_size: int = 1  # 8
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     warmup_iters = 2000
     learning_rate = 6e-4
@@ -32,7 +32,7 @@ class TrainConfig:
     beta1 = 0.9
     beta2 = 0.95
     label_smoothing = 0.0
-    fixed_learning_rate = 1e-5 if args.fix_lr else None # 3e-5
+    fixed_learning_rate = 1e-5 if args.fix_lr else None  # 3e-5
 
 
 def get_lr(it):
@@ -181,9 +181,9 @@ if __name__ == "__main__":
     elif args.dataset.lower() == "tinyshakespere":
         data = TinyShakespere(tokenizer)
     elif args.dataset.lower() == "tinytextbook":
-        data = TinyTextBook(tokenizer, context_len=GPTConfig.context_len, ct_extend=10)
+        data = TinyTextBook(tokenizer, context_len=GPTConfig.context_len * 10)
     elif args.dataset.lower() == "openorca":
-        data = OpenOrca(tokenizer, context_len=GPTConfig.context_len)
+        data = OpenOrca(tokenizer, context_len=GPTConfig.context_len * 10)
     else:
         raise ValueError(f"Invalid dataset name {args.dataset}")
 
@@ -198,16 +198,15 @@ if __name__ == "__main__":
             # Added one extra previous context token on post-training (resides at position 0)
             # the default positional encodings goes to the rest of the positional encodings
             for name, par in model.named_parameters():
-                if (name == "transformer.wpe.weight") and (par.data.shape != weights[name].shape):
+                if (name == "transformer.wpe.weight") and (
+                    par.data.shape != weights[name].shape
+                ):
                     par.data[1:, :] = weights[name]
-                    # print("context_len+1 weight loaded")
                 else:
                     par = weights[name]
-                    #par.requires_grad = False
-                    # print(name, "loaded")
-            
-            #model.transformer.wpe.requires_grad = True
-            #model.lm_head.requires_grad = True
+                    # par.requires_grad = False
+            # model.transformer.wpe.requires_grad = True
+            # model.lm_head.requires_grad = True
 
         print(f"Loaded weight form {init_path}")
 

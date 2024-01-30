@@ -4,7 +4,6 @@ from .model import GPTConfig
 import random
 from datasets import load_dataset
 
-MAX_LEN = 2**12 # 2**13 -> 8192
 
 class TinyShakespere:
     def __init__(self, tokenizer):
@@ -27,28 +26,22 @@ class TinyShakespere:
 
 
 class WikiData:
-    def __init__(self, tokenizer, context_len, ct_extend=1):
+    def __init__(self, tokenizer, context_len):
         self.data = load_dataset("wikipedia", "20220301.en")["train"]
         self.tokenizer = tokenizer
         self.context_len = context_len
-        self.ct_extend = 1
         self.train_idx = int(0.95 * len(self.data))
 
     def get_batch(self, split, batch_size, device):
         # generate a small batch of data of inputs x and targets y
         N = len(self.data)
         ct_len = self.context_len
-        if self.ct_extend != 1:
-            #ct_len *= torch.randint(
-            #    low=1, high=self.ct_extend + 1, size=(1,), device=device
-            #)
-            ct_len = int((ct_len * self.ct_extend) * random.uniform(0.1, 1.0))
 
         while True:
             lo = 0 if split == "train" else self.train_idx
             hi = self.train_idx if split == "train" else N
             data = self.data[torch.randint(low=lo, high=hi, size=(1,))]["text"][0]
-            if len(data) - ct_len > 0:
+            if len(data) - ct_len - batch_size >= 0:
                 break
 
         ix = torch.randint(len(data) - ct_len, (batch_size,))
@@ -68,16 +61,15 @@ class WikiData:
 
 class TinyTextBook(WikiData):
     # Huggingface: https://huggingface.co/datasets/nampdn-ai/tiny-strange-textbooks
-    def __init__(self, tokenizer, context_len, ct_extend=1):
+    def __init__(self, tokenizer, context_len):
         # from huggingface_hub import login
         self.data = load_dataset("nampdn-ai/tiny-strange-textbooks")["train"]
         self.tokenizer = tokenizer
         self.context_len = context_len
-        self.ct_extend = ct_extend
-        self.train_idx = len(self.data)
+        self.train_idx = int(0.95 * len(self.data))
 
     def get_batch(self, split, batch_size, device):
-        return super().get_batch("train", batch_size, device)
+        return super().get_batch(split, batch_size, device)
 
 
 class OpenOrca:
@@ -85,17 +77,18 @@ class OpenOrca:
     This data generator generates data in-order:
         Text: <S>You are good AI</S><Q>Who are you?</Q><A>I am a good AI</A>
         Context len: 8
-        
+
         Outputs:
             1: Inp: <S>You are good AI</S><Q>Who are you?</Q> |
                Out: <S>You are good AI</S><Q>Who are you?</Q> |
             2: Inp: <S>You are good AI</S><Q>Who are you?</Q> | <A>I
-               Out: 
-            3: <S>You are good AI</S><Q>Who are you?</Q> | <A>I 
+               Out:
+            3: <S>You are good AI</S><Q>Who are you?</Q> | <A>I
             4: <S>You are good AI</S><Q>Who are you?</Q> | <A>I a
             4: <S>You are good AI</S><Q>Who are you?</Q> | <A>I am
-        
+
     """
+
     # Huggingface: https://huggingface.co/datasets/Open-Orca/OpenOrca
     def __init__(self, tokenizer, context_len):
         self.data = load_dataset("Open-Orca/OpenOrca")["train"]
@@ -120,51 +113,51 @@ class OpenOrca:
         <A>ANSWER</A>
         """
         # Get random chat data
-        idx = random.randint(0, self.len-1)
+        idx = random.randint(0, self.len - 1)
         data = self.data[idx]
         # Add system prompt and question
         text = (
-            #[76]
-            #+ self.tokenizer.encode(data["system_prompt"])
-            #+ [77]
-            #+ self.tokenizer.encode("\n")
+            # [76]
+            # + self.tokenizer.encode(data["system_prompt"])
+            # + [77]
+            # + self.tokenizer.encode("\n")
             [78]
             + self.tokenizer.encode(data["question"])
             + [79]
             + self.tokenizer.encode("\n")
         )
-        query_len = len(text)
         # Add the response
         text += [80] + self.tokenizer.encode(data["response"]) + [81]
-        st = min(query_len + self.context_len, len(text))
-        ed = len(text)
-        
-        # NOT GO BEYOND MAX_LEN
-        if st >= MAX_LEN:
-            return self.process()
-        if st >= ed-2:
-            return text, st
-        
-        return text, random.randint(st, min(ed-2, MAX_LEN))
+        return text
 
     def get_batch(self, split, batch_size, device):
         x, y = [], []
-        for i in range(batch_size):
-            text, ed = self.process()
-            x.append(text[0 : ed])
-            y.append(text[1 : ed + 1])
-
-        return (
-            torch.tensor(x, dtype=torch.long, device=device),
-            torch.tensor(y, dtype=torch.long, device=device),
+        ct_len = self.context_len
+        
+        while True:
+            text = self.process()
+            if len(text) > ct_len:
+                break
+            
+        ix = torch.randint(len(text) - ct_len, (batch_size,))
+        x = torch.tensor(
+            [text[i : i + ct_len] for i in ix],
+            dtype=torch.long,
+            device=device,
         )
+        y = torch.tensor(
+            [text[i + 1 : i + ct_len + 1] for i in ix],
+            dtype=torch.long,
+            device=device,
+        )
+        return x, y
 
 
 if __name__ == "__main__":
     from tokenizer import Tokenizer
 
     tokenizer = Tokenizer()
-    data = OpenOrca(tokenizer, 128)
+    data = OpenOrca(tokenizer, 128*10)
 
     for i in range(2):
         t, s = data.get_batch("train", 1, "cpu")

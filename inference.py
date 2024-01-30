@@ -1,6 +1,4 @@
 import torch
-import pickle
-import io
 import os
 import torch.nn.functional as F
 from components.model import GPT, GPTConfig, CPU_Unpickler
@@ -10,13 +8,12 @@ from argparse import ArgumentParser
 
 # Argument parsing
 parser = ArgumentParser()
-parser.add_argument("--weight", type=str, default="tinytextbook")
+parser.add_argument("--weight", type=str, default="openorca")
 parser.add_argument("--chat", type=bool, default=False)
 args, leftovers = parser.parse_known_args()
 
 model = GPT(GPTConfig)
 tokenizer = Tokenizer()
-
 
 savepath = os.path.join(".", "logs", args.weight, "log.pkl")
 with open(savepath, "rb") as filehandler:
@@ -63,18 +60,14 @@ while True:
 
     if args.chat:
         x = (
-            [76]
-            + tokenizer.encode(
-                "You are an AI assistant. You will be given a task. You must generate a detailed and long answer."
-            )
-            + [77]
-            + tokenizer.encode("\n")
-            + [78]
-            + x
-            + [79]
-            + tokenizer.encode("\n")
-            + [80]
+            # [76]
+            # + tokenizer.encode(
+            #     "You are an AI assistant. You will be given a task. You must generate a detailed and long answer."
+            # )
+            # + [77]
+            # + tokenizer.encode("\n")
+            [78] + x + [79] + tokenizer.encode("\n") + [80]
         )
 
     x = torch.tensor(x, dtype=torch.long).unsqueeze(0)
-    generate(x, max_new_tokens=128, temperature=0.5)
+    generate(x, max_new_tokens=128, temperature=0.5, top_k=10)

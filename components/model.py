@@ -197,6 +197,8 @@ class GPT(nn.Module):
         # Context embedding of current window (b, [t or t+1], n_embd)
         window = None
         pad = False
+        loss = 0.0
+        tokens = 0.0
 
         # Go for context rollover
         while p < t:
@@ -209,10 +211,15 @@ class GPT(nn.Module):
                 pad = True
             window = idx[:, st:ed]
             p = ed
-            # Only calculating the embedding
-            window = self.forwardV1(
-                window, prev_context=context_embd, embedding_only=True
+            # Calculating the embedding and loss
+            window, _, w_loss = self.forwardV1(
+                window,
+                targets=targets[:, st:ed] if targets is not None else None,
+                prev_context=context_embd,
             )
+            if w_loss is not None:
+                loss += w_loss
+                tokens += window.size()[1] - 1
             context_embd = window.mean(dim=1, keepdim=True)
 
         # Final calculation
@@ -226,18 +233,24 @@ class GPT(nn.Module):
             # ignoring it as the model only focus on last context window
             targets = targets[:, -t:]
             # CE loss
-            loss = F.cross_entropy(
-                logits.reshape(-1, logits.size(-1)),
-                targets.reshape(-1),
-                ignore_index=-1,
+            loss = (
+                F.cross_entropy(
+                    logits.reshape(-1, logits.size(-1)),
+                    targets.reshape(-1),
+                    ignore_index=-1,
+                    reduction="sum",
+                )
+                + loss
             )
+            tokens += targets.size()[1]
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
-            logits = self.lm_head(
-                window[:, [-1], :]
-            )  # note: using list [-1] to preserve the time dim
+            # note: using list [-1] to preserve the time dim
+            logits = self.lm_head(window[:, [-1], :])
             loss = None
 
+        if loss is not None:
+            loss = loss / tokens
         return logits, loss
 
     def forwardV1(self, idx, targets=None, prev_context=None, embedding_only=False):
@@ -275,8 +288,13 @@ class GPT(nn.Module):
         if targets is not None:
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
+            # ignoring the first logit as it is the context from previous segment
+            logits = logits[:, 1:, :]
             loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
+                logits.view(-1, logits.size(-1)),
+                targets.view(-1),
+                ignore_index=-1,
+                reduction="sum",
             )
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
@@ -285,7 +303,7 @@ class GPT(nn.Module):
             )  # note: using list [-1] to preserve the time dim
             loss = None
 
-        return logits, loss
+        return x, logits, loss
 
     def forward(self, *args, **kwargs):
         return self.forwardV2(*args, **kwargs)
