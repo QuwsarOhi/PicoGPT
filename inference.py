@@ -70,4 +70,4 @@ while True:
         )
 
     x = torch.tensor(x, dtype=torch.long).unsqueeze(0)
-    generate(x, max_new_tokens=256, temperature=0.5)
+    generate(x, max_new_tokens=256, temperature=0.5, top_k=3)
