@@ -20,54 +20,35 @@ with open(savepath, "rb") as filehandler:
     model.load_state_dict(CPU_Unpickler(filehandler).load()["best_weight"])
 model.eval()
 
-
-@torch.inference_mode
-def generate(idx, max_new_tokens, temperature=1.0, top_k=None):
-    """
-    Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
-    the sequence max_new_tokens times, feeding the predictions back into the model each time.
-    Most likely you'll want to make sure to be in model.eval() mode of operation for this.
-    """
-    for _ in range(max_new_tokens):
-        # forward the model to get the logits for the index in the sequence
-        logits, _ = model(idx)
-        # pluck the logits at the final step and scale by desired temperature
-        logits = logits[:, -1, :] / temperature
-
-        # optionally crop the logits to only the top k options
-        if top_k is not None:
-            v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-            logits[logits < v[:, [-1]]] = -float("Inf")
-
-        # apply softmax to convert logits to (normalized) probabilities
-        probs = F.softmax(logits, dim=-1)
-        # sample from the distribution
-        idx_next = torch.multinomial(probs, num_samples=1)
-        # append sampled index to the running sequence and continue
-        idx = torch.cat((idx, idx_next), dim=1)
-        tok = tokenizer.decode(idx_next[0].tolist())[0]
-        print(tok, end="")
-        if tok == ".":
-            print()
-            return
-    print("\n<STRIPPED>\n")
-
-
 while True:
-    print("Input: ", end="")
-    x = input()
-    x = tokenizer.encode(x)
+    # conv = (
+    #     [76]
+    #     + tokenizer.encode(
+    #         "You are an AI assistant. You will be given a task. You must generate a detailed and long answer."
+    #     )
+    #     + [77]
+    #     + tokenizer.encode("\n")
+    # )
+    conv = []
+    
+    while True:
+        print("Input: ", end="")
+        ques = input()
+        ques = tokenizer.encode(ques)
+        ques = [78] + ques + [79] + tokenizer.encode("\n") + [80]
 
-    if args.chat:
-        x = (
-            # [76]
-            # + tokenizer.encode(
-            #     "You are an AI assistant. You will be given a task. You must generate a detailed and long answer."
-            # )
-            # + [77]
-            # + tokenizer.encode("\n")
-            [78] + x + [79] + tokenizer.encode("\n") + [80]
-        )
-
-    x = torch.tensor(x, dtype=torch.long).unsqueeze(0)
-    generate(x, max_new_tokens=256, temperature=0.5, top_k=3)
+        # Add the question with the previous conversation so that GPT knows
+        # what happened before
+        conv = conv + ques
+        conv_len = len(conv)
+        
+        print("-+-+"*20)
+        print("".join(tokenizer.decode(conv)))
+        print("-+-+"*20)
+        
+        ques = torch.tensor(conv, dtype=torch.long).unsqueeze(0)
+        ans = model.generate(ques, max_new_tokens=256, temperature=0.5).detach()[0].tolist()
+        decoded_ans = "".join(tokenizer.decode(ans[conv_len:]))
+        print(decoded_ans)
+        # Add the answer to the conversation
+        conv = ans + [81] + tokenizer.encode("\n")
