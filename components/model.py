@@ -219,7 +219,7 @@ class GPT(nn.Module):
             )
             if w_loss is not None:
                 loss += w_loss
-                tokens += window.size()[1] - 1
+                tokens += (window.size()[1] - 1) * bs
             context_embd = window.mean(dim=1, keepdim=True)
 
         # Final calculation
@@ -242,7 +242,7 @@ class GPT(nn.Module):
                 )
                 + loss
             )
-            tokens += targets.size()[1]
+            tokens += (targets.size()[1] * bs)
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
             # note: using list [-1] to preserve the time dim
