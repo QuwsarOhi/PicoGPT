@@ -269,7 +269,7 @@ class GPT(nn.Module):
         # if we don't have previous context then add zero embedding
         tok_emb = self.transformer.wte(idx)
         if prev_context is None:
-            prev_context = torch.zeros(b, 1, self.config.n_embd)
+            prev_context = torch.zeros(b, 1, self.config.n_embd, device=device)
         tok_emb = torch.cat((prev_context, tok_emb), dim=1)
         # position embeddings of shape (t, n_embd)
         pos_emb = self.transformer.wpe(pos)
@@ -291,8 +291,8 @@ class GPT(nn.Module):
             # ignoring the first logit as it is the context from previous segment
             logits = logits[:, 1:, :]
             loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)),
-                targets.view(-1),
+                logits.reshape(-1, logits.size(-1)),
+                targets.reshape(-1),
                 ignore_index=-1,
                 reduction="sum",
             )
