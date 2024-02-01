@@ -22,7 +22,7 @@ args, leftovers = parser.parse_known_args()
 
 @dataclass
 class TrainConfig:
-    batch_size: int = 1  # 8
+    batch_size: int = 8
     device: str = "cuda" if torch.cuda.is_available() else "cpu"
     warmup_iters = 2000
     learning_rate = 6e-4
@@ -147,7 +147,7 @@ def train_fn(
             "Inference:",
             "".join(
                 tokenizer.decode(
-                    model.generate(x, max_new_tokens=500, temperature=0.5)
+                    model.generate(x, max_new_tokens=256, temperature=0.5)
                     .detach()[0]
                     .tolist()
                 )
@@ -176,6 +176,7 @@ if __name__ == "__main__":
     tokenizer = Tokenizer()
     print(f"Training on {args.dataset} dataset")
 
+    # Load dataset
     if args.dataset.lower() == "wikidata":
         data = WikiData(tokenizer, context_len=GPTConfig.context_len * 10)
     elif args.dataset.lower() == "tinyshakespere":
@@ -187,14 +188,18 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Invalid dataset name {args.dataset}")
 
+    # Model initialization
     model = GPT(GPTConfig).to(TrainConfig.device)
-
+    
+    # Load weight if defined
     if args.init_weight is not None:
         init_path = os.path.join(".", "logs", args.init_weight, "log.pkl")
         with open(init_path, "rb") as filehandler:
             prev_train = CPU_Unpickler(filehandler).load()
             model.load_state_dict(prev_train["best_weight"], strict=False)
+        print("Weight loaded from", args.init_weight)
 
+    # Optimizer
     optimizer = model.configure_optimizers(
         TrainConfig.weight_decay,
         TrainConfig.fixed_learning_rate
@@ -204,6 +209,7 @@ if __name__ == "__main__":
         TrainConfig.device,
     )
 
+    # Training
     train_fn(
         model,
         300,

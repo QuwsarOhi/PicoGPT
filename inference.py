@@ -42,9 +42,9 @@ while True:
         conv = conv + ques
         conv_len = len(conv)
         
-        print("-+-+"*20)
-        print("".join(tokenizer.decode(conv)))
-        print("-+-+"*20)
+        # print("-+-+"*20)
+        # print("".join(tokenizer.decode(conv)))
+        # print("-+-+"*20)
         
         ques = torch.tensor(conv, dtype=torch.long).unsqueeze(0)
         ans = model.generate(ques, max_new_tokens=256, temperature=0.5).detach()[0].tolist()

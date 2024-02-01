@@ -74,17 +74,7 @@ class TinyTextBook(WikiData):
 class OpenOrca:
     """
     This data generator generates data in-order:
-        Text: <S>You are good AI</S><Q>Who are you?</Q><A>I am a good AI</A>
-        Context len: 8
-
-        Outputs:
-            1: Inp: <S>You are good AI</S><Q>Who are you?</Q> |
-               Out: <S>You are good AI</S><Q>Who are you?</Q> |
-            2: Inp: <S>You are good AI</S><Q>Who are you?</Q> | <A>I
-               Out:
-            3: <S>You are good AI</S><Q>Who are you?</Q> | <A>I
-            4: <S>You are good AI</S><Q>Who are you?</Q> | <A>I a
-            4: <S>You are good AI</S><Q>Who are you?</Q> | <A>I am
+    <Q>Who are you?</Q><A>I am a good AI</A>
     """
 
     # Huggingface: https://huggingface.co/datasets/Open-Orca/OpenOrca
@@ -115,40 +105,40 @@ class OpenOrca:
         data = self.data[idx]
         # Add system prompt and question
         text = (
+            # System prompt (not using)
             # [76]
             # + self.tokenizer.encode(data["system_prompt"])
             # + [77]
             # + self.tokenizer.encode("\n")
+            # Question
             [78]
             + self.tokenizer.encode(data["question"])
             + [79]
             + self.tokenizer.encode("\n")
+            # Answer
+            + [80]
+            + self.tokenizer.encode(data["response"]) 
+            + [81]
         )
-        # Add the response
-        text += [80] + self.tokenizer.encode(data["response"]) + [81]
         return text
 
     def get_batch(self, split, batch_size, device):
         x, y = [], []
         ct_len = self.context_len
+        text = self.process()
 
-        while True:
-            text = self.process()
-            if len(text) > ct_len:
-                break
-
-        ix = torch.randint(len(text) - ct_len, (batch_size,))
-        x = torch.tensor(
-            [text[i : i + ct_len] for i in ix],
-            dtype=torch.long,
-            device=device,
+        if len(text) <= ct_len:
+            x = [text]
+            y = [text[1:] + [81]]
+        else:
+            ix = torch.randint(len(text) - ct_len, (batch_size,))        
+            x = [text[i : i + ct_len] for i in ix]
+            y = [text[i + 1 : i + ct_len + 1] for i in ix]
+        
+        return (
+            torch.tensor(x, dtype=torch.long, device=device),
+            torch.tensor(y, dtype=torch.long, device=device)
         )
-        y = torch.tensor(
-            [text[i + 1 : i + ct_len + 1] for i in ix],
-            dtype=torch.long,
-            device=device,
-        )
-        return x, y
 
 
 if __name__ == "__main__":
