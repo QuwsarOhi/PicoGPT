@@ -51,6 +51,7 @@ PicoGPT
 │   └── tokenizer.py             # a simple lowercase charachter tokenizer
 ├── LICENSE
 ├── README.md
+├── inference.py                 # model inference
 └── train.py                     # model training code
 ```
 
